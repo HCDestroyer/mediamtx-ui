@@ -1,6 +1,6 @@
 // Package web serves the Nodo panel embedded in the agent binary, the way Astra serves its own interface.
-// The files under dist/ are produced by scripts/build-agent.sh; a placeholder page is committed so the
-// package always builds.
+// The built files under dist/ are committed (scripts/build-agent.sh refreshes them), so a plain
+// `go build` already produces the full installable.
 package web
 
 import (
