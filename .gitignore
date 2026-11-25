@@ -16,3 +16,7 @@ android/local.properties
 *.keystore
 *.tsbuildinfo
 test-results
+
+# agent
+agent/data
+agent/nodo-agent
