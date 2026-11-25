@@ -19,6 +19,8 @@ func runInit(args []string, out io.Writer) error {
 	fs := flag.NewFlagSet("init", flag.ContinueOnError)
 	fs.SetOutput(out)
 	listen := fs.String("listen", "", "bind address instead of all interfaces, e.g. 10.8.0.2:9980")
+	mtxConf := fs.String("mediamtx-conf", "", "path of your mediamtx.yml, to manage an additional configuration file")
+	mtxBin := fs.String("mediamtx-bin", "", "mediamtx binary used to validate configurations before applying them")
 	dry := fs.Bool("print", false, "print the systemd unit and change nothing (works without root)")
 	fs.Usage = func() {
 		fmt.Fprintln(out, "Usage: nodo-agent init [flags] [port] [name]\n\nRegisters the agent as a systemd service. Run it again with another port and name\nto add a second instance (each has its own services and token).\n\nFlags:")
@@ -27,7 +29,7 @@ func runInit(args []string, out io.Writer) error {
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	opts := initcmd.Options{Name: initcmd.DefaultName, Port: initcmd.DefaultPort, Listen: *listen}
+	opts := initcmd.Options{Name: initcmd.DefaultName, Port: initcmd.DefaultPort, Listen: *listen, MediaMTXConf: *mtxConf, MediaMTXBin: *mtxBin}
 	if fs.NArg() > 2 {
 		return fmt.Errorf("too many arguments: %v", fs.Args()[2:])
 	}

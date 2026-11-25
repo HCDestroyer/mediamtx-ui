@@ -22,6 +22,7 @@ import (
 	"nodo/agent/internal/api"
 	"nodo/agent/internal/auth"
 	"nodo/agent/internal/media"
+	"nodo/agent/internal/mtxconf"
 	"nodo/agent/internal/service"
 	"nodo/agent/internal/store"
 	"nodo/agent/internal/web"
@@ -54,6 +55,8 @@ func main() {
 		origins  = flag.String("allow-origin", "*", "comma-separated origins allowed by CORS")
 		certFile = flag.String("tls-cert", "", "TLS certificate for the API (with -tls-key)")
 		keyFile  = flag.String("tls-key", "", "TLS key for the API")
+		mtxConf  = flag.String("mediamtx-conf", "", "path of your mediamtx.yml (read only); enables the additional configuration file")
+		mtxBin   = flag.String("mediamtx-bin", "", "mediamtx binary used to validate configurations before applying them (--validate-conf)")
 		showVer  = flag.Bool("version", false, "print the version and exit")
 	)
 	flag.Usage = func() {
@@ -67,13 +70,19 @@ func main() {
 	}
 
 	log := slog.New(slog.NewTextHandler(os.Stderr, nil))
-	if err := run(log, *listen, *dataDir, *ffmpeg, *rtsp, *mtxUser, *origins, *certFile, *keyFile); err != nil {
+	if err := run(log, runOptions{listen: *listen, dataDir: *dataDir, ffmpeg: *ffmpeg, rtsp: *rtsp, mtxUser: *mtxUser, origins: *origins, certFile: *certFile, keyFile: *keyFile, mtxConf: *mtxConf, mtxBin: *mtxBin}); err != nil {
 		log.Error("agent stopped", "error", err)
 		os.Exit(1)
 	}
 }
 
-func run(log *slog.Logger, listen, dataDir, ffmpeg, rtsp, mtxUser, origins, certFile, keyFile string) error {
+type runOptions struct {
+	listen, dataDir, ffmpeg, rtsp, mtxUser, origins, certFile, keyFile string
+	mtxConf, mtxBin                                                    string
+}
+
+func run(log *slog.Logger, o runOptions) error {
+	listen, dataDir, ffmpeg, rtsp, mtxUser, origins, certFile, keyFile := o.listen, o.dataDir, o.ffmpeg, o.rtsp, o.mtxUser, o.origins, o.certFile, o.keyFile
 	st, err := store.Open(dataDir)
 	if err != nil {
 		return err
@@ -88,6 +97,28 @@ func run(log *slog.Logger, listen, dataDir, ffmpeg, rtsp, mtxUser, origins, cert
 	}
 	if !accounts.HasAccounts() {
 		log.Warn("no panel account yet: open the panel and create it with the API token, or run: nodo-agent passwd <user>", "data", dataDir)
+	}
+
+	var mtx *mtxconf.Manager
+	if o.mtxConf != "" {
+		var validate mtxconf.Validator
+		if o.mtxBin != "" {
+			validate = mtxconf.MediaMTXValidator(o.mtxBin)
+		}
+		mtx, err = mtxconf.New(mtxconf.Paths{
+			Base:    o.mtxConf,
+			Overlay: filepath.Join(dataDir, "mediamtx", "overlay.yml"),
+			Out:     filepath.Join(dataDir, "mediamtx", "mediamtx.yml"),
+		}, validate)
+		if err != nil {
+			return err
+		}
+		if err := mtx.Regenerate(); err != nil {
+			// A broken base must not stop the agent: the previous generated file stays in place.
+			log.Warn("could not regenerate the MediaMTX configuration", "error", err)
+		} else {
+			log.Info("MediaMTX configuration generated", "file", filepath.Join(dataDir, "mediamtx", "mediamtx.yml"), "validated", o.mtxBin != "")
+		}
 	}
 
 	cfg := media.Config{FFmpeg: ffmpeg, MediaMTXRTSP: rtsp, MediaMTXUser: mtxUser, MediaMTXPass: os.Getenv("NODO_MEDIAMTX_PASS")}
@@ -108,7 +139,7 @@ func run(log *slog.Logger, listen, dataDir, ffmpeg, rtsp, mtxUser, origins, cert
 	}
 	srv := &http.Server{
 		Addr:              listen,
-		Handler:           api.New(api.Config{Token: token, AllowOrigins: splitList(origins), Info: info, Panel: web.Handler(), Accounts: accounts}, mgr),
+		Handler:           api.New(api.Config{Token: token, AllowOrigins: splitList(origins), Info: info, Panel: web.Handler(), Accounts: accounts, MediaMTX: mtx}, mgr),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 	errc := make(chan error, 1)

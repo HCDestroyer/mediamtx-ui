@@ -97,3 +97,20 @@ func TestInstallRefusesInvalidOptionsWithoutTouchingDisk(t *testing.T) {
 		t.Fatalf("wrote %d entries", len(entries))
 	}
 }
+
+func TestMediaMTXFlagsReachTheUnit(t *testing.T) {
+	o := opts()
+	o.MediaMTXConf = "/etc/mediamtx/mediamtx.yml"
+	o.MediaMTXBin = "/usr/local/bin/mediamtx"
+	if !strings.Contains(Unit(o), "-data /etc/nodo/nodo -mediamtx-conf /etc/mediamtx/mediamtx.yml -mediamtx-bin /usr/local/bin/mediamtx\n") {
+		t.Fatal(Unit(o))
+	}
+	o.MediaMTXConf = "relative.yml"
+	if o.Validate() == nil {
+		t.Fatal("relative path accepted")
+	}
+	o.MediaMTXConf = "/etc/a b.yml"
+	if o.Validate() == nil {
+		t.Fatal("path with a space accepted")
+	}
+}

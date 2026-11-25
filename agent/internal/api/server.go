@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"nodo/agent/internal/auth"
+	"nodo/agent/internal/mtxconf"
 	"nodo/agent/internal/service"
 )
 
@@ -37,6 +38,8 @@ type Config struct {
 	Accounts *auth.Store
 	// Limiter slows down password guessing per client address; defaults to 5 free failures, then 2 s doubling to 10 min.
 	Limiter *auth.Limiter
+	// MediaMTX manages the additional MediaMTX configuration file; nil disables /api/v1/mediamtx.
+	MediaMTX *mtxconf.Manager
 }
 
 // Server holds the routes.
@@ -54,6 +57,10 @@ func New(cfg Config, mgr *service.Manager) http.Handler {
 		cfg.Limiter = auth.NewLimiter(5, 2*time.Second, 10*time.Minute)
 	}
 	s := &Server{cfg: cfg, mgr: mgr, mux: http.NewServeMux()}
+	s.mux.HandleFunc("GET /api/v1/mediamtx/config", s.auth(s.mtxState))
+	s.mux.HandleFunc("PUT /api/v1/mediamtx/config", s.auth(s.mtxApply))
+	s.mux.HandleFunc("POST /api/v1/mediamtx/validate", s.auth(s.mtxValidate))
+	s.mux.HandleFunc("POST /api/v1/mediamtx/undo", s.auth(s.mtxUndo))
 	s.mux.HandleFunc("GET /api/v1/auth/status", s.authStatus)
 	s.mux.HandleFunc("POST /api/v1/auth/setup", s.authSetup)
 	s.mux.HandleFunc("POST /api/v1/auth/login", s.authLogin)
@@ -296,7 +303,11 @@ func clientKey(r *http.Request) string {
 }
 
 func decodeBody(w http.ResponseWriter, r *http.Request, v any) bool {
-	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<14))
+	return decodeBodyMax(w, r, v, 1<<14)
+}
+
+func decodeBodyMax(w http.ResponseWriter, r *http.Request, v any, limit int64) bool {
+	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, limit))
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(v); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
@@ -419,4 +430,92 @@ func (s *Server) authPassword(w http.ResponseWriter, r *http.Request) {
 	}
 	epoch, _ := s.cfg.Accounts.Verify(user, body.New)
 	s.newSession(w, http.StatusOK, user, epoch)
+}
+
+// ---- MediaMTX configuration (additional file) ----
+
+type overlayBody struct {
+	Overlay string `json:"overlay"`
+}
+
+func (s *Server) mtxEnabled(w http.ResponseWriter) bool {
+	if s.cfg.MediaMTX == nil {
+		writeError(w, http.StatusNotFound, "MediaMTX configuration management is not enabled on this agent")
+		return false
+	}
+	return true
+}
+
+func mtxFailure(w http.ResponseWriter, err error) {
+	var invalid *mtxconf.InvalidError
+	if errors.As(err, &invalid) {
+		writeError(w, http.StatusUnprocessableEntity, invalid.Message)
+		return
+	}
+	writeError(w, http.StatusInternalServerError, err.Error())
+}
+
+func (s *Server) mtxState(w http.ResponseWriter, _ *http.Request) {
+	if !s.mtxEnabled(w) {
+		return
+	}
+	st, err := s.cfg.MediaMTX.State()
+	if err != nil {
+		mtxFailure(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, st)
+}
+
+// mtxValidate checks a candidate without saving it: {ok, error} or {ok, merged} (secrets masked).
+func (s *Server) mtxValidate(w http.ResponseWriter, r *http.Request) {
+	if !s.mtxEnabled(w) {
+		return
+	}
+	var body overlayBody
+	if !decodeBodyMax(w, r, &body, 2<<20) {
+		return
+	}
+	merged, err := s.cfg.MediaMTX.Preview(body.Overlay)
+	var invalid *mtxconf.InvalidError
+	switch {
+	case errors.As(err, &invalid):
+		writeJSON(w, http.StatusOK, map[string]any{"ok": false, "error": invalid.Message})
+	case err != nil:
+		mtxFailure(w, err)
+	default:
+		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "merged": merged})
+	}
+}
+
+// mtxApply validates and applies; an invalid configuration is answered with 422 and changes nothing.
+func (s *Server) mtxApply(w http.ResponseWriter, r *http.Request) {
+	if !s.mtxEnabled(w) {
+		return
+	}
+	var body overlayBody
+	if !decodeBodyMax(w, r, &body, 2<<20) {
+		return
+	}
+	if err := s.cfg.MediaMTX.Apply(body.Overlay); err != nil {
+		mtxFailure(w, err)
+		return
+	}
+	s.mtxState(w, r)
+}
+
+func (s *Server) mtxUndo(w http.ResponseWriter, r *http.Request) {
+	if !s.mtxEnabled(w) {
+		return
+	}
+	if err := s.cfg.MediaMTX.Undo(); err != nil {
+		var invalid *mtxconf.InvalidError
+		if errors.As(err, &invalid) {
+			mtxFailure(w, err)
+		} else {
+			writeError(w, http.StatusConflict, err.Error())
+		}
+		return
+	}
+	s.mtxState(w, r)
 }

@@ -21,6 +21,10 @@ type Options struct {
 	Exe  string // absolute path of the agent binary
 	// Listen is the bind address; empty means all interfaces on Port.
 	Listen string
+	// MediaMTXConf is the operator's mediamtx.yml and MediaMTXBin the mediamtx binary used to validate
+	// changes; both optional. With MediaMTXConf set the agent manages an additional configuration file.
+	MediaMTXConf string
+	MediaMTXBin  string
 }
 
 var namePattern = regexp.MustCompile(`^[a-z][a-z0-9-]{0,30}$`)
@@ -39,6 +43,11 @@ func (o Options) Validate() error {
 	if strings.ContainsAny(o.Listen, " \t\n\"'\\$%") {
 		return fmt.Errorf("listen address %q is not valid", o.Listen)
 	}
+	for _, p := range []string{o.MediaMTXConf, o.MediaMTXBin} {
+		if p != "" && (!filepath.IsAbs(p) || strings.ContainsAny(p, " \t\n\"'\\$%")) {
+			return fmt.Errorf("path %q must be absolute and contain no spaces or special characters", p)
+		}
+	}
 	return nil
 }
 
@@ -55,6 +64,17 @@ func (o Options) listen() string {
 	return fmt.Sprintf("0.0.0.0:%d", o.Port)
 }
 
+func (o Options) extraFlags() string {
+	var b strings.Builder
+	if o.MediaMTXConf != "" {
+		b.WriteString(" -mediamtx-conf " + o.MediaMTXConf)
+	}
+	if o.MediaMTXBin != "" {
+		b.WriteString(" -mediamtx-bin " + o.MediaMTXBin)
+	}
+	return b.String()
+}
+
 // Unit renders the systemd unit.
 func Unit(o Options) string {
 	return fmt.Sprintf(`[Unit]
@@ -64,7 +84,7 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=%[2]s -listen %[3]s -data %[4]s
+ExecStart=%[2]s -listen %[3]s -data %[4]s%[5]s
 Restart=always
 RestartSec=2
 LimitNOFILE=65536
@@ -74,7 +94,7 @@ ProtectHome=true
 
 [Install]
 WantedBy=multi-user.target
-`, o.Name, o.Exe, o.listen(), o.DataDir())
+`, o.Name, o.Exe, o.listen(), o.DataDir(), o.extraFlags())
 }
 
 // Install writes the unit and creates the data directory under root ("/" in production; a temporary
