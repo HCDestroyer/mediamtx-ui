@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"regexp"
 	"strings"
 	"testing"
 	"testing/fstest"
@@ -105,9 +106,19 @@ func TestPathTraversalStaysInside(t *testing.T) {
 	}
 }
 
-func TestEmbeddedPlaceholderBuilds(t *testing.T) {
+// The built panel is committed so `go build` alone yields the full installable. If this fails, run
+// scripts/build-agent.sh --panel-only and commit agent/internal/web/dist.
+func TestEmbeddedPanelIsTheRealApp(t *testing.T) {
 	rec := get(Handler(), "/", nil)
-	if rec.Code != 200 || !strings.Contains(rec.Body.String(), "nodo-agent") {
-		t.Fatalf("code %d", rec.Code)
+	body := rec.Body.String()
+	if rec.Code != 200 || !strings.Contains(body, `id="root"`) {
+		t.Fatalf("embedded index.html is not the panel (code %d)", rec.Code)
+	}
+	m := regexp.MustCompile(`assets/[^"]+\.js`).FindString(body)
+	if m == "" {
+		t.Fatal("index.html references no script")
+	}
+	if rec := get(Handler(), "/"+m, nil); rec.Code != 200 {
+		t.Fatalf("%s: code %d (stale or partial dist)", m, rec.Code)
 	}
 }

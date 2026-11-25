@@ -59,20 +59,32 @@ publish and read.
 Like Astra, the agent is a single file that serves the Nodo panel and the API on the same port, so
 there is nothing else to host and no CORS or mixed-content issues between panel and agent.
 
+The built panel is committed in `internal/web/dist`, so a plain `go build ./cmd/nodo-agent` already
+produces the full installable (no Node needed). From a release tarball:
+
 ```bash
-scripts/build-agent.sh            # builds the panel, embeds it, writes agent/nodo-agent (~8 MB, no CGO)
-sudo cp agent/nodo-agent /usr/bin/nodo-agent
-sudo nodo-agent init              # registers systemd service "nodo" on port 9980 (data in /etc/nodo/nodo)
+tar xzf nodo-agent_<version>_linux_amd64.tar.gz && cd nodo-agent_*/
+sudo ./install.sh                 # installs /usr/bin/nodo-agent, registers service "nodo" on port 9980, starts it
+```
+
+or by hand:
+
+```bash
+sudo cp nodo-agent /usr/bin/nodo-agent
+sudo nodo-agent init              # systemd service "nodo", port 9980, data in /etc/nodo/nodo
 sudo systemctl enable --now nodo
 sudo cat /etc/nodo/nodo/token     # API token for the panel
 ```
+
+Maintainers: after changing `src/`, run `scripts/build-agent.sh` (rebuilds the panel into `dist/`, then the
+binary; `--panel-only` skips the binary) and commit `agent/internal/web/dist`. `scripts/release.sh [version]`
+writes the Linux amd64/arm64 tarballs and `SHA256SUMS` to `release/`. A test fails if the embedded panel is
+missing or incomplete.
 
 Open `http://<server>:9980`, add this server and fill in "Agente (opcional)" with `<server>:9980` and the
 token. `nodo-agent init 9981 nodo2` adds a second, independent instance; `init -print` shows the unit
 without installing it. To update: replace the binary and `systemctl restart nodo`. To back up:
 `tar -Pzcf nodo-backup.tar.gz /usr/bin/nodo-agent /etc/nodo`.
-
-A plain `go build ./cmd/nodo-agent` still works: it embeds a placeholder page and serves only the API.
 
 ## Run by hand
 
