@@ -41,7 +41,7 @@ const check = (n, ok, x = '') => log.push(`${ok ? 'PASS' : 'FAIL'} ${n} ${x}`);
 
   await page.setViewportSize({ width: 390, height: 800 });
   await page.goto(URL + '#/settings');
-  await page.getByRole('link', { name: 'Abrir' }).nth(1).click();
+  await page.getByRole('link', { name: 'Abrir' }).nth(2).click();
   await recs.waitFor();
   check('mobile: reachable from Settings, no horizontal page scroll', await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
   await page.screenshot({ path: `${SHOTS}/system-mobile.png` });
