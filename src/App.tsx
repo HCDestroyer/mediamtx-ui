@@ -15,6 +15,7 @@ const ConnectionsPage = lazy(() => import("./pages/ConnectionsPage"));
 const ServicesPage = lazy(() => import("./pages/ServicesPage"));
 const ConfigPage = lazy(() => import("./pages/ConfigPage"));
 const BinariesPage = lazy(() => import("./pages/BinariesPage"));
+const SystemPage = lazy(() => import("./pages/SystemPage"));
 const NotFoundPage = lazy(() => import("./pages/NotFoundPage"));
 const SetupScreen = lazy(() => import("./components/auth/SetupScreen"));
 const LockScreen = lazy(() => import("./components/auth/LockScreen"));
@@ -40,6 +41,8 @@ function Page() {
       return <ConfigPage />;
     case "binaries":
       return <BinariesPage />;
+    case "system":
+      return <SystemPage />;
     case "servers":
       return <ServersPage />;
     case "settings":

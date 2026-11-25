@@ -173,3 +173,62 @@ export interface ProcessView {
   status: ProcessStatus;
   logs: string[];
 }
+
+export interface HostInterface {
+  name: string;
+  up: boolean;
+  /** 0 when the driver does not report it. */
+  speedMbps: number;
+  /** Loopback, bridges, veth, tunnels: no physical device behind them. */
+  virtual: boolean;
+  rxBytes: number;
+  txBytes: number;
+  rxBps: number;
+  txBps: number;
+  /** Errors and drops over the last minute. */
+  recentErrors: number;
+}
+
+export interface HostGpu {
+  vendor: "nvidia" | "intel" | "amd" | "other";
+  device: string;
+  render?: string;
+}
+
+export interface HostDvbAdapter {
+  index: number;
+  frontends: number;
+  vendor?: string;
+  device?: string;
+}
+
+export interface HostPciCard {
+  vendor: string;
+  device: string;
+  /** Empty when no driver is bound to the card. */
+  driver?: string;
+}
+
+export type FindingLevel = "ok" | "info" | "warn";
+
+/** One observation of the advisor. The agent sends the id and the numbers; the panel writes the text. */
+export interface HostFinding {
+  id: string;
+  level: FindingLevel;
+  params?: Record<string, string | number>;
+}
+
+export interface HostView {
+  cpu: { model: string; cores: number };
+  cpuUsage: number;
+  memory: { totalKB: number; availableKB: number };
+  uptimeSec: number;
+  load: [number, number, number];
+  rates: HostInterface[];
+  udp: { inDatagrams: number; inErrors: number; rcvbufErrors: number };
+  recentUdpDrops: number;
+  gpus: HostGpu[];
+  dvb: HostDvbAdapter[];
+  pciCards: HostPciCard[];
+  findings: HostFinding[];
+}

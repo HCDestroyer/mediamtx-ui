@@ -125,6 +125,16 @@ sudo nodo-agent init -mediamtx-conf /etc/mediamtx/mediamtx.yml -mediamtx-bin /us
 - Channels created, edited or deleted from the panel are also written to the additional file (`PUT/PATCH/DELETE /api/v1/mediamtx/paths/<name>`), so they survive a MediaMTX restart. The live change goes first through MediaMTX's own API; a path that only exists in the additional file is dropped on delete, one defined in your file gets a `null` that removes it from the generated file.
 - Not verified against a real MediaMTX binary yet: the tests use a stand-in that implements `--validate-conf`.
 
+## Host, network and hardware
+
+`GET /api/v1/host` reports, from `/proc` and `/sys` only (no external tools): CPU and memory, per-interface rates and
+errors over the last minute, UDP receive-buffer overflows (the usual cause of broken multicast), GPUs, DVB adapters and
+TBS / Digital Devices cards (with or without driver), and kernel settings that matter for transport streams. An advisor
+turns that into findings with a stable id, a level (`warn`, `info`, `ok`) and the numbers it saw; the panel writes the
+explanation (why it matters and what to do). Rules: missing FFmpeg, low memory, small UDP buffer or packets lost,
+interface errors, slow links, strict `rp_filter` with several NICs, CPU governor, GPU without a matching FFmpeg encoder,
+DVB card without driver, DVB adapters without TSDuck/dvblast.
+
 ## Binaries and the MediaMTX process
 
 The agent can install MediaMTX itself and, optionally, run it (needs `-mediamtx-conf`, so there is a generated file to run with):
@@ -160,6 +170,7 @@ All `/api/v1` routes except `auth/status`, `auth/login` and `auth/setup` need `A
 | `GET /api/v1/binaries` · `/binaries/mediamtx/latest` | versions, tools found / newest release |
 | `POST /api/v1/binaries/mediamtx/install` · `use` · `DELETE /binaries/mediamtx/<tag>` | install, select, remove a version |
 | `GET /api/v1/mediamtx/process` · `POST /mediamtx/process/{start,stop,restart}` | run MediaMTX from the agent |
+| `GET /api/v1/host` | resources, network, hardware and recommendations |
 | `GET /api/v1/info` | version, FFmpeg found |
 | `GET /api/v1/services` | every service with its status |
 | `POST /api/v1/services` | create (the id is derived from the name when omitted) |

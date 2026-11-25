@@ -179,3 +179,11 @@ describe("binaries calls", () => {
     expect(calls[1]?.timeoutMs).toBeLessThanOrEqual(10_000);
   });
 });
+
+describe("host call", () => {
+  it("reads /api/v1/host", async () => {
+    const { client, calls } = fake(() => ({ status: 200, data: { findings: [] } }));
+    await client.host();
+    expect(`${calls[0]?.method} ${new URL(calls[0]!.url).pathname}`).toBe("GET /api/v1/host");
+  });
+});

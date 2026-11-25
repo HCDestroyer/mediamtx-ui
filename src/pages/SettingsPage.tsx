@@ -80,6 +80,21 @@ export default function SettingsPage() {
       <Card>
         <Card.Content className="flex flex-row items-center gap-3">
           <div className="min-w-0 flex-1">
+            <p className="font-semibold">{t.settings.system}</p>
+            <p className="text-xs text-[var(--muted)]">{t.settings.systemHelp}</p>
+          </div>
+          <a
+            href={hrefFor({ name: "system" })}
+            className="rounded-xl bg-[var(--surface-secondary)] px-3 py-2 text-sm font-medium"
+          >
+            {t.settings.open}
+          </a>
+        </Card.Content>
+      </Card>
+
+      <Card>
+        <Card.Content className="flex flex-row items-center gap-3">
+          <div className="min-w-0 flex-1">
             <p className="font-semibold">{t.settings.binaries}</p>
             <p className="text-xs text-[var(--muted)]">{t.settings.binariesHelp}</p>
           </div>

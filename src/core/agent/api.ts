@@ -1,7 +1,7 @@
 import { encodePathName } from "../mediamtx/api";
 import { getTransport, isMixedContentBlocked, type Transport } from "../http";
 import type {
-  AgentInfo, AgentService, AgentView, BinariesState, MediaMtxBinaries, MtxConfigState, MtxValidation, ProcessView,
+  AgentInfo, AgentService, AgentView, BinariesState, HostView, MediaMtxBinaries, MtxConfigState, MtxValidation, ProcessView,
 } from "./types";
 
 export class AgentError extends Error {
@@ -56,6 +56,7 @@ export interface AgentClient {
   /** Validates and applies; rejects with AgentError(422) and the reason when it is invalid. */
   mtxApply(overlay: string): Promise<MtxConfigState>;
   mtxUndo(): Promise<MtxConfigState>;
+  host(): Promise<HostView>;
   binaries(): Promise<BinariesState>;
   /** Asks the release server for the newest MediaMTX version. */
   latestMediaMtx(): Promise<string>;
@@ -164,6 +165,7 @@ export function createAgentClient(options: AgentClientOptions): AgentClient {
     mtxValidate: (overlay) => call<MtxValidation>("POST", "/api/v1/mediamtx/validate", { overlay }),
     mtxApply: (overlay) => call<MtxConfigState>("PUT", "/api/v1/mediamtx/config", { overlay }),
     mtxUndo: () => call<MtxConfigState>("POST", "/api/v1/mediamtx/undo"),
+    host: () => call<HostView>("GET", "/api/v1/host"),
     binaries: () => call<BinariesState>("GET", "/api/v1/binaries"),
     latestMediaMtx: async () => (await call<{ version: string }>("GET", "/api/v1/binaries/mediamtx/latest")).version,
     // Installing downloads tens of MB and verifies them: give it far more than the usual timeout.

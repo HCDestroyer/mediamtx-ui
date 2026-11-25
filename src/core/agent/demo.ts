@@ -1,6 +1,6 @@
 import type { HttpRequest, HttpResponse, Transport } from "../http";
 import type {
-  BinariesState, MtxConfigState, ProcessStatus, AgentEvent, AgentInputStatus, AgentMapEntry, AgentProfile, AgentProgram, AgentService, AgentStatus, AgentView,
+  BinariesState, HostView, MtxConfigState, ProcessStatus, AgentEvent, AgentInputStatus, AgentMapEntry, AgentProfile, AgentProgram, AgentService, AgentStatus, AgentView,
 } from "./types";
 
 /** Agent URL of the demo server; the demo transport answers by path and ignores the host. */
@@ -122,6 +122,39 @@ export function createDemoAgentTransport(now: () => number = Date.now): Transpor
     bins.startedAt = now();
     procLogs.push(`--- started ${bins.current}`, `INF MediaMTX ${bins.current}`);
   };
+  /** A machine that has a few things worth advising on, so the demo shows each kind of recommendation. */
+  const hostView = (): HostView => {
+    const t = now() / 1000;
+    const wave = (period: number, phase = 0) => 0.5 + 0.5 * Math.sin(t / period + phase);
+    const eth = (name: string, rx: number, tx: number) => ({
+      name, up: true, speedMbps: 1000, virtual: false, rxBytes: 9e11, txBytes: 4e12,
+      rxBps: Math.round(rx * 1e6), txBps: Math.round(tx * 1e6), recentErrors: 0,
+    });
+    return {
+      cpu: { model: "Intel(R) Xeon(R) E-2236 CPU @ 3.40GHz", cores: 6 },
+      cpuUsage: 18 + 22 * wave(7),
+      memory: { totalKB: 32_000_000, availableKB: Math.round(21_000_000 - 2_000_000 * wave(11)) },
+      uptimeSec: 18 * 86400 + 4 * 3600,
+      load: [1.2 + wave(9), 1.1, 0.9],
+      rates: [
+        eth("eth0", 38 + 14 * wave(5), 96 + 30 * wave(6, 1)),
+        { ...eth("eth1", 0, 0), up: false, speedMbps: 0 },
+        { ...eth("docker0", 0.1, 0.1), virtual: true, speedMbps: 0 },
+        { ...eth("lo", 2, 2), virtual: true, speedMbps: 0 },
+      ],
+      udp: { inDatagrams: 91_000_000, inErrors: 12, rcvbufErrors: 12 },
+      recentUdpDrops: 12,
+      gpus: [],
+      dvb: [],
+      pciCards: [{ vendor: "tbs", device: "544d:6205" }],
+      findings: [
+        { id: "net-rmem-low", level: "warn", params: { drops: 12, rmemMax: 212992 } },
+        { id: "dvb-driver-missing", level: "warn", params: { vendor: "tbs", device: "544d:6205" } },
+        { id: "cpu-governor", level: "info", params: { governor: "powersave" } },
+        { id: "gpu-none", level: "info" },
+      ],
+    };
+  };
   const first = start(INITIAL);
   first.startedAt = now() - 3 * 3600_000;
   sims.set(INITIAL.id, first);
@@ -162,6 +195,7 @@ export function createDemoAgentTransport(now: () => number = Date.now): Transpor
     if (request.headers?.Authorization !== `Bearer ${DEMO_AGENT_TOKEN}`) return fail(401, "missing or wrong token");
 
     if (path === "/api/v1/info") return ok({ version: "0.1.0-demo", ffmpeg: "ffmpeg version 6.1.1", mediamtx: true, startedAt: Math.floor(now() / 1000) });
+    if (path === "/api/v1/host" && method === "GET") return ok(hostView());
     if (path === "/api/v1/binaries" && method === "GET") return ok(binState());
     if (path === "/api/v1/binaries/mediamtx/latest") return ok({ version: newest() });
     if (path === "/api/v1/binaries/mediamtx/install" && method === "POST") {
