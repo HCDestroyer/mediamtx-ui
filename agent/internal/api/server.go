@@ -16,6 +16,7 @@ import (
 
 	"nodo/agent/internal/auth"
 	"nodo/agent/internal/binaries"
+	"nodo/agent/internal/host"
 	"nodo/agent/internal/mtxconf"
 	"nodo/agent/internal/service"
 	"nodo/agent/internal/supervisor"
@@ -46,6 +47,8 @@ type Config struct {
 	// Binaries installs MediaMTX versions; Supervisor runs the selected one. Either may be nil.
 	Binaries   *binaries.Manager
 	Supervisor *supervisor.Supervisor
+	// Host reports resources, network, hardware and recommendations; nil disables /api/v1/host.
+	Host *host.Monitor
 	// FFmpeg is the FFmpeg binary (or name) reported by /binaries.
 	FFmpeg string
 }
@@ -72,6 +75,7 @@ func New(cfg Config, mgr *service.Manager) http.Handler {
 	s.mux.HandleFunc("PUT /api/v1/mediamtx/paths/{name...}", s.auth(s.mtxPath("set")))
 	s.mux.HandleFunc("PATCH /api/v1/mediamtx/paths/{name...}", s.auth(s.mtxPath("patch")))
 	s.mux.HandleFunc("DELETE /api/v1/mediamtx/paths/{name...}", s.auth(s.mtxPath("remove")))
+	s.mux.HandleFunc("GET /api/v1/host", s.auth(s.hostView))
 	s.mux.HandleFunc("GET /api/v1/binaries", s.auth(s.binList))
 	s.mux.HandleFunc("GET /api/v1/binaries/mediamtx/latest", s.auth(s.binLatest))
 	s.mux.HandleFunc("POST /api/v1/binaries/mediamtx/install", s.auth(s.binInstall))
@@ -732,4 +736,13 @@ func (s *Server) procAction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.procStatus(w, r)
+}
+
+// hostView answers with the latest sample of the machine; the monitor refreshes it in the background.
+func (s *Server) hostView(w http.ResponseWriter, _ *http.Request) {
+	if s.cfg.Host == nil {
+		writeError(w, http.StatusNotFound, "host monitoring is not enabled on this agent")
+		return
+	}
+	writeJSON(w, http.StatusOK, s.cfg.Host.View())
 }

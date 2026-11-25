@@ -121,3 +121,13 @@ func TestPathsAreKeptInTheAdditionalFile(t *testing.T) {
 		t.Fatalf("anonymous: %d", resp.StatusCode)
 	}
 }
+
+func TestHostViewNeedsAuthAndIsOptional(t *testing.T) {
+	srv := newServer(t)
+	if resp, _ := do(t, srv, "GET", "/api/v1/host", "", ""); resp.StatusCode != 401 {
+		t.Fatalf("anonymous: %d", resp.StatusCode)
+	}
+	if resp, _ := do(t, srv, "GET", "/api/v1/host", "Bearer "+token, ""); resp.StatusCode != 404 {
+		t.Fatalf("disabled: %d", resp.StatusCode)
+	}
+}

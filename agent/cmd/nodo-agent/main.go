@@ -16,12 +16,14 @@ import (
 	"os/signal"
 	"path/filepath"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
 	"nodo/agent/internal/api"
 	"nodo/agent/internal/auth"
 	"nodo/agent/internal/binaries"
+	"nodo/agent/internal/host"
 	"nodo/agent/internal/media"
 	"nodo/agent/internal/mtxconf"
 	"nodo/agent/internal/service"
@@ -141,6 +143,38 @@ func run(log *slog.Logger, o runOptions) error {
 		defer sup.Close()
 	}
 
+	// Host monitor: tool detection spawns processes, so it is cached; encoders are listed once, in the background.
+	var (
+		toolMu    sync.Mutex
+		toolAt    time.Time
+		toolCache []host.ToolPresence
+		encoders  []string
+		encMu     sync.Mutex
+	)
+	monitor := host.NewMonitor("/", 2*time.Second, func() []host.ToolPresence {
+		toolMu.Lock()
+		defer toolMu.Unlock()
+		if time.Since(toolAt) > 30*time.Second {
+			toolCache = toolCache[:0]
+			for _, t := range binaries.Tools(ffmpeg) {
+				toolCache = append(toolCache, host.ToolPresence{ID: t.ID, Found: t.Found})
+			}
+			toolAt = time.Now()
+		}
+		return append([]host.ToolPresence(nil), toolCache...)
+	}, func() []string {
+		encMu.Lock()
+		defer encMu.Unlock()
+		return encoders
+	})
+	go func() {
+		list := host.Encoders(ffmpeg)
+		encMu.Lock()
+		encoders = list
+		encMu.Unlock()
+	}()
+	go monitor.Run(supCtx)
+
 	cfg := media.Config{FFmpeg: ffmpeg, MediaMTXRTSP: rtsp, MediaMTXUser: mtxUser, MediaMTXPass: os.Getenv("NODO_MEDIAMTX_PASS")}
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
@@ -159,7 +193,7 @@ func run(log *slog.Logger, o runOptions) error {
 	}
 	srv := &http.Server{
 		Addr:              listen,
-		Handler:           api.New(api.Config{Token: token, AllowOrigins: splitList(origins), Info: info, Panel: web.Handler(), Accounts: accounts, MediaMTX: mtx, Binaries: bins, Supervisor: sup, FFmpeg: ffmpeg}, mgr),
+		Handler:           api.New(api.Config{Token: token, AllowOrigins: splitList(origins), Info: info, Panel: web.Handler(), Accounts: accounts, MediaMTX: mtx, Binaries: bins, Supervisor: sup, FFmpeg: ffmpeg, Host: monitor}, mgr),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 	errc := make(chan error, 1)
