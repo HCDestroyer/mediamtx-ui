@@ -24,7 +24,7 @@ export interface Server {
 }
 
 export interface AgentConfig {
-  /** Base URL of the agent API, e.g. `http://192.168.1.20:9998`. */
+  /** Base URL of the agent API, e.g. `http://192.168.1.20:9980`. */
   url: string;
   token: string;
 }

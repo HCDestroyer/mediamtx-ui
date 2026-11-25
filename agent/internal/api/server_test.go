@@ -204,3 +204,39 @@ func TestSlug(t *testing.T) {
 		}
 	}
 }
+
+func newServerWithPanel(t *testing.T) *httptest.Server {
+	t.Helper()
+	ctx, cancel := context.WithCancel(context.Background())
+	mgr := service.NewManager(ctx, media.Config{}, slog.New(slog.NewTextHandler(io.Discard, nil)), nopStore{})
+	panel := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { _, _ = io.WriteString(w, "PANEL") })
+	srv := httptest.NewServer(New(Config{Token: token, Info: Info{Version: "test"}, Panel: panel}, mgr))
+	t.Cleanup(func() { srv.Close(); mgr.StopAll(); cancel() })
+	return srv
+}
+
+func TestPanelIsServedAtRootAndTheAPIStaysProtected(t *testing.T) {
+	srv := newServerWithPanel(t)
+	if _, body := do(t, srv, "GET", "/", "", ""); body != "PANEL" {
+		t.Fatalf("root: %q", body)
+	}
+	if _, body := do(t, srv, "GET", "/services", "", ""); body != "PANEL" {
+		t.Fatalf("client route: %q", body)
+	}
+	if resp, _ := do(t, srv, "GET", "/api/v1/services", "", ""); resp.StatusCode != 401 {
+		t.Fatalf("API without token: %d", resp.StatusCode)
+	}
+	resp, body := do(t, srv, "GET", "/api/v1/nope", "Bearer "+token, "")
+	if resp.StatusCode != 404 || strings.Contains(body, "PANEL") {
+		t.Fatalf("unknown API path must be a JSON 404, got %d %q", resp.StatusCode, body)
+	}
+	if resp, _ := do(t, srv, "GET", "/healthz", "", ""); resp.StatusCode != 200 {
+		t.Fatalf("healthz: %d", resp.StatusCode)
+	}
+}
+
+func TestWithoutPanelRootIs404(t *testing.T) {
+	if resp, _ := do(t, newServer(t), "GET", "/", "", ""); resp.StatusCode != 404 {
+		t.Fatalf("got %d", resp.StatusCode)
+	}
+}

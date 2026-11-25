@@ -28,6 +28,8 @@ type Config struct {
 	// AllowOrigins lists the origins allowed by CORS; "*" allows any (the token is in a header, not a cookie).
 	AllowOrigins []string
 	Info         Info
+	// Panel serves the web interface at "/" (embedded in the binary); nil serves the API only.
+	Panel http.Handler
 }
 
 // Server holds the routes.
@@ -52,6 +54,11 @@ func New(cfg Config, mgr *service.Manager) http.Handler {
 	s.mux.HandleFunc("POST /api/v1/services/{id}/enable", s.auth(s.setEnabled(true)))
 	s.mux.HandleFunc("POST /api/v1/services/{id}/disable", s.auth(s.setEnabled(false)))
 	s.mux.HandleFunc("POST /api/v1/services/{id}/switch", s.auth(s.switchInput))
+	// Unknown API paths answer JSON, never the panel's index.html.
+	s.mux.HandleFunc("/api/", func(w http.ResponseWriter, _ *http.Request) { writeError(w, http.StatusNotFound, "not found") })
+	if cfg.Panel != nil {
+		s.mux.Handle("/", cfg.Panel)
+	}
 	return s.cors(s.mux)
 }
 

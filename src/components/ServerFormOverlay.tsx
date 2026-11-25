@@ -241,7 +241,7 @@ function ServerFormBody({ state, server, onSave }: ServerFormOverlayProps) {
             isInvalid={!!errors.agent}
           >
             <Label>{t.servers.form.agentUrl}</Label>
-            <Input inputMode="url" autoCapitalize="none" autoCorrect="off" spellCheck={false} placeholder="192.168.1.20:9998" />
+            <Input inputMode="url" autoCapitalize="none" autoCorrect="off" spellCheck={false} placeholder="192.168.1.20:9980" />
             <FieldError>{errors.agent}</FieldError>
           </TextField>
           <TextField name="agent-token" type="password" value={fields.agentToken} onChange={(v) => set("agentToken", v)}>

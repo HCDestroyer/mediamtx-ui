@@ -23,14 +23,22 @@ import (
 	"nodo/agent/internal/media"
 	"nodo/agent/internal/service"
 	"nodo/agent/internal/store"
+	"nodo/agent/internal/web"
 )
 
 // version is overridden at build time: go build -ldflags "-X main.version=1.2.3".
 var version = "0.1.0-dev"
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "init" {
+		if err := runInit(os.Args[2:], os.Stdout); err != nil {
+			fmt.Fprintln(os.Stderr, "init:", err)
+			os.Exit(1)
+		}
+		return
+	}
 	var (
-		listen   = flag.String("listen", "127.0.0.1:9998", "address of the HTTP API; bind to a LAN or VPN address only behind a firewall")
+		listen   = flag.String("listen", "127.0.0.1:9980", "address of the web panel and API; bind to a LAN or VPN address only behind a firewall")
 		dataDir  = flag.String("data", "./data", "directory for services.json and the token")
 		ffmpeg   = flag.String("ffmpeg", "ffmpeg", "FFmpeg binary used as protocol adapter")
 		rtsp     = flag.String("mediamtx-rtsp", "", "RTSP base URL of the local MediaMTX, e.g. rtsp://127.0.0.1:8554 (enables mediamtx:// addresses)")
@@ -40,6 +48,10 @@ func main() {
 		keyFile  = flag.String("tls-key", "", "TLS key for the API")
 		showVer  = flag.Bool("version", false, "print the version and exit")
 	)
+	flag.Usage = func() {
+		fmt.Fprintf(os.Stderr, "Usage:\n  nodo-agent [flags]            run the agent\n  nodo-agent init [port] [name] register it as a systemd service (see init -h)\n\nFlags:\n")
+		flag.PrintDefaults()
+	}
 	flag.Parse()
 	if *showVer {
 		fmt.Println(version)
@@ -81,7 +93,7 @@ func run(log *slog.Logger, listen, dataDir, ffmpeg, rtsp, mtxUser, origins, cert
 	}
 	srv := &http.Server{
 		Addr:              listen,
-		Handler:           api.New(api.Config{Token: token, AllowOrigins: splitList(origins), Info: info}, mgr),
+		Handler:           api.New(api.Config{Token: token, AllowOrigins: splitList(origins), Info: info, Panel: web.Handler()}, mgr),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 	errc := make(chan error, 1)

@@ -54,11 +54,31 @@ inputs ──► [active input] ──► stabilizer ──► outputs
 for credentials. Credentials appear in the FFmpeg command line, so use a MediaMTX user that can only
 publish and read.
 
-## Run
+## One binary, its own web server
+
+Like Astra, the agent is a single file that serves the Nodo panel and the API on the same port, so
+there is nothing else to host and no CORS or mixed-content issues between panel and agent.
+
+```bash
+scripts/build-agent.sh            # builds the panel, embeds it, writes agent/nodo-agent (~8 MB, no CGO)
+sudo cp agent/nodo-agent /usr/bin/nodo-agent
+sudo nodo-agent init              # registers systemd service "nodo" on port 9980 (data in /etc/nodo/nodo)
+sudo systemctl enable --now nodo
+sudo cat /etc/nodo/nodo/token     # API token for the panel
+```
+
+Open `http://<server>:9980`, add this server and fill in "Agente (opcional)" with `<server>:9980` and the
+token. `nodo-agent init 9981 nodo2` adds a second, independent instance; `init -print` shows the unit
+without installing it. To update: replace the binary and `systemctl restart nodo`. To back up:
+`tar -Pzcf nodo-backup.tar.gz /usr/bin/nodo-agent /etc/nodo`.
+
+A plain `go build ./cmd/nodo-agent` still works: it embeds a placeholder page and serves only the API.
+
+## Run by hand
 
 ```bash
 go build -o nodo-agent ./cmd/nodo-agent
-./nodo-agent -listen 127.0.0.1:9998 -data /var/lib/nodo \
+./nodo-agent -listen 127.0.0.1:9980 -data /var/lib/nodo \
   -mediamtx-rtsp rtsp://127.0.0.1:8554 -mediamtx-user agent
 ```
 
@@ -68,7 +88,7 @@ when it crosses a network.
 
 ## API
 
-All routes except `/healthz` need `Authorization: Bearer <token>`.
+All `/api/v1` routes need `Authorization: Bearer <token>`.
 
 | Route | |
 | --- | --- |
@@ -107,5 +127,5 @@ that the output structure and continuity never change.
 
 ## Not done yet
 
-Passive backup mode, DVB input (TBS cards), SDT/NIT for multi-service output, a slate (screensaver)
+Panel login (user and password validated by the agent; today the panel uses the API token), passive backup mode, DVB input (TBS cards), SDT/NIT for multi-service output, a slate (screensaver)
 for missing streams, SRT without FFmpeg.
