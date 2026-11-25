@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { Button, Card, Label, ListBox, Select, Switch, toast } from "@heroui/react";
 import { Download, Upload } from "lucide-react";
+import { SecuritySettings } from "../components/auth/SecuritySettings";
 import { exportServers, parseImport } from "../core/serversIO";
 import { fmt, t } from "../i18n/es";
 import { POLL_INTERVALS_MS, usePrefs, type PollIntervalMs, type ThemePref } from "../store/prefs";
@@ -114,6 +115,8 @@ export default function SettingsPage() {
           <p className="text-xs text-[var(--muted)] sm:col-span-2">{t.settings.refreshHelp}</p>
         </Card.Content>
       </Card>
+
+      <SecuritySettings />
 
       <Card>
         <Card.Header>

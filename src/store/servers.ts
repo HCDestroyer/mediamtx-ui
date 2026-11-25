@@ -1,9 +1,10 @@
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
+import { createJSONStorage, persist } from "zustand/middleware";
 import { normalizeApiUrl } from "../core/http";
 import { DEMO_API_URL } from "../core/demo";
 import { newId } from "../core/serversIO";
 import type { Server, ServerDraft } from "../core/types";
+import { SERVERS_STORAGE_NAME, secureStore } from "./secure";
 
 interface ServersState {
   servers: Server[];
@@ -28,8 +29,9 @@ function clean(draft: ServerDraft): ServerDraft {
   };
 }
 
-// Credentials are stored in the clear in localStorage on the web build. The
-// Android build moves the password to secure storage in phase 5.
+// Credentials are stored in localStorage. With panel protection on they are
+// encrypted by the vault (see core/secureStore.ts); the Android build moves
+// them to native secure storage in the APK phase.
 export const useServers = create<ServersState>()(
   persist(
     (set, get) => ({
@@ -72,7 +74,7 @@ export const useServers = create<ServersState>()(
           activeServerId: state.activeServerId ?? incoming[0]?.id ?? null,
         })),
     }),
-    { name: "nodo:servers", version: 1 },
+    { name: SERVERS_STORAGE_NAME, version: 1, storage: createJSONStorage(() => secureStore) },
   ),
 );
 

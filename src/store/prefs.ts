@@ -6,10 +6,16 @@ export type ThemePref = "system" | "light" | "dark";
 export const POLL_INTERVALS_MS = [1000, 2000, 5000, 10000] as const;
 export type PollIntervalMs = (typeof POLL_INTERVALS_MS)[number];
 
+/** Minutes of inactivity before the panel locks itself; 0 means never. */
+export const AUTO_LOCK_MINUTES = [5, 15, 30, 0] as const;
+export type AutoLockMinutes = (typeof AUTO_LOCK_MINUTES)[number];
+
 interface PrefsState {
   theme: ThemePref;
   /** Dashboard refresh interval (used from phase 2). */
   pollIntervalMs: PollIntervalMs;
+  autoLockMinutes: AutoLockMinutes;
+  setAutoLockMinutes: (value: AutoLockMinutes) => void;
   setTheme: (theme: ThemePref) => void;
   setPollIntervalMs: (value: PollIntervalMs) => void;
 }
@@ -20,6 +26,8 @@ export const usePrefs = create<PrefsState>()(
     (set) => ({
       theme: "system",
       pollIntervalMs: 2000,
+      autoLockMinutes: 15,
+      setAutoLockMinutes: (autoLockMinutes) => set({ autoLockMinutes }),
       setTheme: (theme) => set({ theme }),
       setPollIntervalMs: (pollIntervalMs) => set({ pollIntervalMs }),
     }),
