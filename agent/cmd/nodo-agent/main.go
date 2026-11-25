@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"nodo/agent/internal/api"
+	"nodo/agent/internal/auth"
 	"nodo/agent/internal/media"
 	"nodo/agent/internal/service"
 	"nodo/agent/internal/store"
@@ -37,6 +38,13 @@ func main() {
 		}
 		return
 	}
+	if len(os.Args) > 1 && os.Args[1] == "passwd" {
+		if err := runPasswd(os.Args[2:], os.Stdin, os.Stdout); err != nil {
+			fmt.Fprintln(os.Stderr, "passwd:", err)
+			os.Exit(1)
+		}
+		return
+	}
 	var (
 		listen   = flag.String("listen", "127.0.0.1:9980", "address of the web panel and API; bind to a LAN or VPN address only behind a firewall")
 		dataDir  = flag.String("data", "./data", "directory for services.json and the token")
@@ -49,7 +57,7 @@ func main() {
 		showVer  = flag.Bool("version", false, "print the version and exit")
 	)
 	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "Usage:\n  nodo-agent [flags]            run the agent\n  nodo-agent init [port] [name] register it as a systemd service (see init -h)\n\nFlags:\n")
+		fmt.Fprintf(os.Stderr, "Usage:\n  nodo-agent [flags]            run the agent\n  nodo-agent init [port] [name] register it as a systemd service (see init -h)\n  nodo-agent passwd <user>      create a panel account or reset its password\n\nFlags:\n")
 		flag.PrintDefaults()
 	}
 	flag.Parse()
@@ -74,6 +82,13 @@ func run(log *slog.Logger, listen, dataDir, ffmpeg, rtsp, mtxUser, origins, cert
 	if err != nil {
 		return err
 	}
+	accounts, err := auth.Open(dataDir)
+	if err != nil {
+		return err
+	}
+	if !accounts.HasAccounts() {
+		log.Warn("no panel account yet: open the panel and create it with the API token, or run: nodo-agent passwd <user>", "data", dataDir)
+	}
 
 	cfg := media.Config{FFmpeg: ffmpeg, MediaMTXRTSP: rtsp, MediaMTXUser: mtxUser, MediaMTXPass: os.Getenv("NODO_MEDIAMTX_PASS")}
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
@@ -93,7 +108,7 @@ func run(log *slog.Logger, listen, dataDir, ffmpeg, rtsp, mtxUser, origins, cert
 	}
 	srv := &http.Server{
 		Addr:              listen,
-		Handler:           api.New(api.Config{Token: token, AllowOrigins: splitList(origins), Info: info, Panel: web.Handler()}, mgr),
+		Handler:           api.New(api.Config{Token: token, AllowOrigins: splitList(origins), Info: info, Panel: web.Handler(), Accounts: accounts}, mgr),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 	errc := make(chan error, 1)
