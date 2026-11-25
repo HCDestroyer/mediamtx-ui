@@ -8,10 +8,12 @@ import {
   TextField,
   type UseOverlayStateReturn,
 } from "@heroui/react";
-import { isValidApiUrl } from "../core/http";
+import { createAgentClient, AgentError, MIXED_CONTENT } from "../core/agent/api";
+import { isValidApiUrl, normalizeApiUrl } from "../core/http";
+import { agentTransportFor } from "../core/transport";
 import { probeAll, type ProbeResult } from "../core/resolver";
 import { ENDPOINT_ORDER, SERVER_COLORS, type EndpointType, type Server, type ServerDraft } from "../core/types";
-import { t } from "../i18n/es";
+import { fmt, t } from "../i18n/es";
 import { EndpointProbeList } from "./EndpointProbeList";
 import { ResponsiveOverlay } from "./ResponsiveOverlay";
 
@@ -23,6 +25,8 @@ interface Fields {
   urls: Record<EndpointType, string>;
   username: string;
   password: string;
+  agentUrl: string;
+  agentToken: string;
 }
 
 function fieldsFrom(server?: Server): Fields {
@@ -33,6 +37,8 @@ function fieldsFrom(server?: Server): Fields {
     urls: { lan: url("lan"), vpn: url("vpn"), public: url("public") },
     username: server?.username ?? "",
     password: server?.password ?? "",
+    agentUrl: server?.agent?.url ?? "",
+    agentToken: server?.agent?.token ?? "",
   };
 }
 
@@ -42,13 +48,14 @@ function draftFrom(fields: Fields): ServerDraft {
     color: fields.color,
     username: fields.username,
     password: fields.password,
+    ...(fields.agentUrl.trim() ? { agent: { url: fields.agentUrl, token: fields.agentToken } } : {}),
     endpoints: ENDPOINT_ORDER.map((type) => ({ type, apiUrl: fields.urls[type] })).filter(
       (e) => e.apiUrl.trim() !== "",
     ),
   };
 }
 
-type Errors = Partial<Record<"name" | "endpoints" | EndpointType, string>>;
+type Errors = Partial<Record<"name" | "endpoints" | "agent" | EndpointType, string>>;
 
 function validate(fields: Fields): Errors {
   const errors: Errors = {};
@@ -58,6 +65,7 @@ function validate(fields: Fields): Errors {
   for (const type of filled) {
     if (!isValidApiUrl(fields.urls[type])) errors[type] = t.servers.form.endpointInvalid;
   }
+  if (fields.agentUrl.trim() && !isValidApiUrl(fields.agentUrl)) errors.agent = t.servers.form.agentUrlInvalid;
   return errors;
 }
 
@@ -80,6 +88,8 @@ function ServerFormBody({ state, server, onSave }: ServerFormOverlayProps) {
   const [errors, setErrors] = useState<Errors>({});
   const [results, setResults] = useState<ProbeResult[] | undefined>();
   const [testing, setTesting] = useState(false);
+  const [agentResult, setAgentResult] = useState<{ ok: boolean; text: string } | undefined>();
+  const [agentTesting, setAgentTesting] = useState(false);
 
   const set = <K extends keyof Fields>(key: K, value: Fields[K]) => {
     setFields((f) => ({ ...f, [key]: value }));
@@ -102,6 +112,31 @@ function ServerFormBody({ state, server, onSave }: ServerFormOverlayProps) {
     setTesting(true);
     setResults(await probeAll(draftFrom(fields)));
     setTesting(false);
+  };
+
+  const testAgent = async () => {
+    const found = validate(fields);
+    if (!fields.agentUrl.trim() || found.agent) {
+      setErrors((e) => ({ ...e, agent: found.agent ?? t.servers.form.agentUrlInvalid }));
+      return;
+    }
+    setAgentTesting(true);
+    try {
+      const client = createAgentClient({
+        baseUrl: normalizeApiUrl(fields.agentUrl),
+        token: fields.agentToken.trim(),
+        transport: agentTransportFor({ demo: server?.demo }),
+      });
+      const info = await client.info();
+      setAgentResult({ ok: true, text: fmt(t.servers.form.agentOk, { version: info.version }) });
+    } catch (error) {
+      const status = error instanceof AgentError ? error.status : 0;
+      setAgentResult({
+        ok: false,
+        text: status === 401 ? t.servers.form.agentAuth : status === MIXED_CONTENT ? t.probeFailure["mixed-content"] : t.servers.form.agentFail,
+      });
+    }
+    setAgentTesting(false);
   };
 
   const footer = (
@@ -192,6 +227,38 @@ function ServerFormBody({ state, server, onSave }: ServerFormOverlayProps) {
             <Input autoComplete="off" />
           </TextField>
         </div>
+
+        <fieldset className="flex flex-col gap-3">
+          <legend className="text-sm font-medium">{t.servers.form.agent}</legend>
+          <p className="-mt-1 text-xs text-[var(--muted)]">{t.servers.form.agentHelp}</p>
+          <TextField
+            name="agent-url"
+            value={fields.agentUrl}
+            onChange={(v) => {
+              set("agentUrl", v);
+              setAgentResult(undefined);
+            }}
+            isInvalid={!!errors.agent}
+          >
+            <Label>{t.servers.form.agentUrl}</Label>
+            <Input inputMode="url" autoCapitalize="none" autoCorrect="off" spellCheck={false} placeholder="192.168.1.20:9998" />
+            <FieldError>{errors.agent}</FieldError>
+          </TextField>
+          <TextField name="agent-token" type="password" value={fields.agentToken} onChange={(v) => set("agentToken", v)}>
+            <Label>{t.servers.form.agentToken}</Label>
+            <Input autoComplete="off" />
+          </TextField>
+          <div className="flex items-center gap-3">
+            <Button size="sm" variant="secondary" onPress={testAgent} isPending={agentTesting} isDisabled={!fields.agentUrl.trim()}>
+              {t.servers.form.agentTest}
+            </Button>
+            {agentResult ? (
+              <p role="status" className={`text-xs ${agentResult.ok ? "text-[var(--success)]" : "text-[var(--danger)]"}`}>
+                {agentResult.text}
+              </p>
+            ) : null}
+          </div>
+        </fieldset>
 
         {results ? (
           <div className="flex flex-col gap-2">

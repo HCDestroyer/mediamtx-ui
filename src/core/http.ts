@@ -4,7 +4,7 @@
  * not apply. Everything else in the app talks to this module only.
  */
 
-export type HttpMethod = "GET" | "POST" | "PATCH" | "DELETE";
+export type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
 export interface HttpRequest {
   url: string;

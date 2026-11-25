@@ -9,7 +9,7 @@ export const EXPORT_VERSION = 1;
 interface ExportFile {
   format: typeof EXPORT_FORMAT;
   version: number;
-  servers: Array<Omit<Server, "password"> & { password?: string }>;
+  servers: Array<Omit<Server, "password" | "agent"> & { password?: string; agent?: { url: string; token?: string } }>;
 }
 
 export function newId(): string {
@@ -21,8 +21,10 @@ export function exportServers(servers: Server[], includePasswords: boolean): str
     format: EXPORT_FORMAT,
     version: EXPORT_VERSION,
     servers: servers.map((s) => {
-      const { password, ...rest } = s;
-      return includePasswords ? { ...rest, password } : rest;
+      const { password, agent, ...rest } = s;
+      // The agent token is as sensitive as the password: it only travels when asked for.
+      const exported = agent ? { ...rest, agent: includePasswords ? agent : { url: agent.url } } : rest;
+      return includePasswords ? { ...exported, password } : exported;
     }),
   };
   return JSON.stringify(file, null, 2);
@@ -83,6 +85,7 @@ export function parseImport(text: string, existingIds: ReadonlySet<string> = new
     let id = asString(entry.id);
     if (!id || usedIds.has(id)) id = newId();
     usedIds.add(id);
+    const agentUrl = isRecord(entry.agent) ? normalizeApiUrl(asString(entry.agent.url)) : "";
     servers.push({
       id,
       name,
@@ -90,6 +93,7 @@ export function parseImport(text: string, existingIds: ReadonlySet<string> = new
       endpoints,
       username: asString(entry.username),
       password: asString(entry.password),
+      ...(agentUrl ? { agent: { url: agentUrl, token: asString((entry.agent as Record<string, unknown>).token) } } : {}),
     });
   });
 

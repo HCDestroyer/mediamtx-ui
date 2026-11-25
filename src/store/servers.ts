@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import { normalizeApiUrl } from "../core/http";
+import { DEMO_AGENT_TOKEN, DEMO_AGENT_URL } from "../core/agent/demo";
 import { DEMO_API_URL } from "../core/demo";
 import { newId } from "../core/serversIO";
 import type { Server, ServerDraft } from "../core/types";
@@ -19,8 +20,11 @@ interface ServersState {
 }
 
 function clean(draft: ServerDraft): ServerDraft {
+  const agentUrl = normalizeApiUrl(draft.agent?.url ?? "");
+  const { agent: _agent, ...rest } = draft;
   return {
-    ...draft,
+    ...rest,
+    ...(agentUrl ? { agent: { url: agentUrl, token: (draft.agent?.token ?? "").trim() } } : {}),
     name: draft.name.trim(),
     username: draft.username.trim(),
     endpoints: draft.endpoints
@@ -65,6 +69,7 @@ export const useServers = create<ServersState>()(
         const server: Server = {
           id: newId(), name: "Servidor demo", color: "#8a5cf6", username: "", password: "", demo: true,
           endpoints: [{ type: "lan", apiUrl: DEMO_API_URL }],
+          agent: { url: DEMO_AGENT_URL, token: DEMO_AGENT_TOKEN },
         };
         set((state) => ({ servers: [...state.servers, server], activeServerId: server.id }));
       },

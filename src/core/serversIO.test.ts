@@ -76,3 +76,19 @@ describe("servers export / import", () => {
     expect(() => parseImport(JSON.stringify({ hello: 1 }))).toThrow("invalid-format");
   });
 });
+
+describe("agent in export/import", () => {
+  const server = { id: "a", name: "Casa", color: "#2b62e6", endpoints: [{ type: "lan" as const, apiUrl: "http://10.0.0.2:9997" }], username: "u", password: "p", agent: { url: "http://10.0.0.2:9998", token: "secret-token" } };
+
+  it("keeps the agent token out of the file unless secrets are included", () => {
+    expect(exportServers([server], false)).not.toContain("secret-token");
+    expect(exportServers([server], false)).toContain("http://10.0.0.2:9998");
+    expect(exportServers([server], true)).toContain("secret-token");
+  });
+
+  it("restores the agent on import", () => {
+    const [back] = parseImport(exportServers([server], true)).servers;
+    expect(back?.agent).toEqual({ url: "http://10.0.0.2:9998", token: "secret-token" });
+    expect(parseImport(exportServers([server], false)).servers[0]?.agent).toEqual({ url: "http://10.0.0.2:9998", token: "" });
+  });
+});

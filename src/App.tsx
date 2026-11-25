@@ -12,6 +12,7 @@ const ChannelDetailPage = lazy(() => import("./pages/ChannelDetailPage"));
 const ServersPage = lazy(() => import("./pages/ServersPage"));
 const SettingsPage = lazy(() => import("./pages/SettingsPage"));
 const ConnectionsPage = lazy(() => import("./pages/ConnectionsPage"));
+const ServicesPage = lazy(() => import("./pages/ServicesPage"));
 const NotFoundPage = lazy(() => import("./pages/NotFoundPage"));
 const SetupScreen = lazy(() => import("./components/auth/SetupScreen"));
 const LockScreen = lazy(() => import("./components/auth/LockScreen"));
@@ -31,6 +32,8 @@ function Page() {
       return <ChannelDetailPage name={route.channel} />;
     case "connections":
       return <ConnectionsPage />;
+    case "services":
+      return <ServicesPage />;
     case "servers":
       return <ServersPage />;
     case "settings":

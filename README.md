@@ -17,7 +17,9 @@ route and field names to older servers).
 | 1 | Scaffold, responsive layout, theme, server store, endpoint resolver | done |
 | 2 | Dashboard, channel list and detail, copy URLs, demo mode, panel login | done |
 | 3 | Path editor, transcode wizard, native `forward` multistream, delete, YAML export | done |
-| 4 | Host agent: `mediamtx.yml` editing with validation, routes, binaries, hardware | |
+| 4a | Host agent (Go): stable services, PID/language mapping, backup inputs | done |
+| 4b | Panel screen "Servicios" (list, editor, manual switch) with demo agent | done |
+| 4c | Agent: `mediamtx.yml` editing with validation, binaries, hardware, network | |
 | 5 | Connections + kick, WHEP/HLS preview | |
 | 6 | Android APK | |
 
@@ -110,3 +112,11 @@ scripts/         development helpers
   panel over HTTP inside the LAN/VPN, or put the API behind an HTTPS proxy. The APK
   is not affected.
 - Without panel protection, server credentials are stored in `localStorage` in clear text.
+
+## Services (agent)
+
+A server can have an optional `nodo-agent` (see `agent/README.md`). Set its URL and token in the server form
+("Agente (opcional)") and use "Probar agente" to check them. The **Servicios** screen then lists the
+agent's services, shows the output ↔ input PID map, and lets you start/stop, switch input, edit and delete.
+The agent token is a secret: it is encrypted with the vault and only exported when "include passwords" is on.
+The demo server brings a simulated agent, so the whole screen works offline.

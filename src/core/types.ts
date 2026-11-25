@@ -19,6 +19,14 @@ export interface Server {
   password: string;
   /** Demo servers use simulated data and never touch the network. */
   demo?: boolean;
+  /** Optional nodo-agent on the MediaMTX host: services, binaries and hardware. */
+  agent?: AgentConfig;
+}
+
+export interface AgentConfig {
+  /** Base URL of the agent API, e.g. `http://192.168.1.20:9998`. */
+  url: string;
+  token: string;
 }
 
 export type ServerDraft = Omit<Server, "id">;
