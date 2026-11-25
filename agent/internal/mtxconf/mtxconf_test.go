@@ -310,3 +310,115 @@ func TestFreshInstallHasNoUndo(t *testing.T) {
 		t.Fatalf("%+v", st)
 	}
 }
+
+func pathsOf(t *testing.T, file string) map[string]any {
+	t.Helper()
+	data, err := os.ReadFile(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p, _ := decode(t, data)["paths"].(map[string]any)
+	return p
+}
+
+func TestSetPatchAndRemovePathPersistInTheOverlay(t *testing.T) {
+	m, p := newManager(t, base, nil)
+	if err := m.SetPath("canal65", map[string]any{"source": "publisher", "record": nil}); err != nil {
+		t.Fatal(err)
+	}
+	ov, _ := os.ReadFile(p.Overlay)
+	if strings.Contains(string(ov), "record") {
+		t.Fatalf("null fields of a new path must not be written:\n%s", ov)
+	}
+	if err := m.PatchPath("canal65", map[string]any{"maxReaders": 5}); err != nil {
+		t.Fatal(err)
+	}
+	if pathsOf(t, p.Out)["canal65"].(map[string]any)["maxReaders"] != 5 {
+		t.Fatalf("patch not applied: %v", pathsOf(t, p.Out))
+	}
+	if err := m.RemovePath("canal65"); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := pathsOf(t, p.Out)["canal65"]; ok {
+		t.Fatal("path still in the output")
+	}
+	if ov, _ := os.ReadFile(p.Overlay); strings.Contains(string(ov), "canal65") || strings.Contains(string(ov), "paths") {
+		t.Fatalf("an overlay-only path must leave no trace:\n%s", ov)
+	}
+}
+
+func TestPatchingAPathOfTheOperatorsFileOnlyStoresTheChange(t *testing.T) {
+	m, p := newManager(t, base, nil)
+	if err := m.PatchPath("canal63", map[string]any{"runOnDemand": "ffmpeg -i z"}); err != nil {
+		t.Fatal(err)
+	}
+	c := pathsOf(t, p.Out)["canal63"].(map[string]any)
+	if c["runOnDemand"] != "ffmpeg -i z" || c["source"] != "rtsp://cam/stream" {
+		t.Fatalf("%v", c)
+	}
+	ov, _ := os.ReadFile(p.Overlay)
+	if strings.Contains(string(ov), "rtsp://cam/stream") {
+		t.Fatalf("the overlay must not copy the operator's values:\n%s", ov)
+	}
+}
+
+func TestRemovingAPathOfTheOperatorsFileWritesANull(t *testing.T) {
+	m, p := newManager(t, base, nil)
+	if err := m.RemovePath("canal63"); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := pathsOf(t, p.Out)["canal63"]; ok {
+		t.Fatal("canal63 should be gone from the generated file")
+	}
+	if pathsOf(t, p.Out)["all_others"] == nil && len(pathsOf(t, p.Out)) == 0 {
+		t.Fatal("other paths lost")
+	}
+	base, _ := os.ReadFile(p.Base)
+	if !strings.Contains(string(base), "canal63") {
+		t.Fatal("the operator's file was modified")
+	}
+}
+
+func TestPathEditsKeepCommentsAndOtherSettingsOfTheOverlay(t *testing.T) {
+	m, p := newManager(t, base, nil)
+	_ = m.Apply("# my notes\nlogLevel: debug\n")
+	if err := m.SetPath("a", map[string]any{"source": "publisher"}); err != nil {
+		t.Fatal(err)
+	}
+	ov, _ := os.ReadFile(p.Overlay)
+	if !strings.Contains(string(ov), "# my notes") || !strings.Contains(string(ov), "logLevel: debug") {
+		t.Fatalf("overlay content lost:\n%s", ov)
+	}
+}
+
+func TestPathEditsAreValidatedLikeAnyOtherChange(t *testing.T) {
+	reject := func(path string) error {
+		data, _ := os.ReadFile(path)
+		if strings.Contains(string(data), "badField") {
+			return &InvalidError{Message: "unknown field badField"}
+		}
+		return nil
+	}
+	m, p := newManager(t, base, reject)
+	err := m.SetPath("x", map[string]any{"badField": 1})
+	var invalid *InvalidError
+	if !errors.As(err, &invalid) {
+		t.Fatalf("got %v", err)
+	}
+	if _, err := os.Stat(p.Out); err == nil {
+		t.Fatal("a rejected path edit wrote the output")
+	}
+	if err := m.SetPath("mi canal", map[string]any{"source": "publisher"}); err == nil {
+		t.Fatal("invalid path name accepted")
+	}
+}
+
+func TestPathNamesWithSlashes(t *testing.T) {
+	m, p := newManager(t, "", nil)
+	if err := m.SetPath("cams/patio", map[string]any{"source": "publisher"}); err != nil {
+		t.Fatal(err)
+	}
+	if pathsOf(t, p.Out)["cams/patio"] == nil {
+		t.Fatalf("%v", pathsOf(t, p.Out))
+	}
+}

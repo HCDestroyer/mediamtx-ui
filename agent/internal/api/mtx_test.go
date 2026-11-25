@@ -89,3 +89,35 @@ func TestValidateApplyAndUndoOverHTTP(t *testing.T) {
 		t.Fatalf("nothing left to undo: %d", resp.StatusCode)
 	}
 }
+
+func TestPathsAreKeptInTheAdditionalFile(t *testing.T) {
+	srv, out := newMTXServer(t)
+	auth := "Bearer " + token
+	if resp, _ := do(t, srv, "PUT", "/api/v1/mediamtx/paths/cams/patio", auth, `{"conf":{"source":"publisher"}}`); resp.StatusCode != 204 {
+		t.Fatalf("set: %d", resp.StatusCode)
+	}
+	if resp, _ := do(t, srv, "PATCH", "/api/v1/mediamtx/paths/canal63", auth, `{"conf":{"maxReaders":3}}`); resp.StatusCode != 204 {
+		t.Fatalf("patch: %d", resp.StatusCode)
+	}
+	data, _ := os.ReadFile(out)
+	for _, want := range []string{"cams/patio", "maxReaders: 3", "source: publisher"} {
+		if !strings.Contains(string(data), want) {
+			t.Errorf("%q missing:\n%s", want, data)
+		}
+	}
+	if resp, _ := do(t, srv, "DELETE", "/api/v1/mediamtx/paths/cams/patio", auth, ""); resp.StatusCode != 204 {
+		t.Fatalf("remove: %d", resp.StatusCode)
+	}
+	if data, _ := os.ReadFile(out); strings.Contains(string(data), "cams/patio") {
+		t.Fatalf("not removed:\n%s", data)
+	}
+	if resp, body := do(t, srv, "PUT", "/api/v1/mediamtx/paths/x", auth, `{"conf":{"badParam":1}}`); resp.StatusCode != 422 || !strings.Contains(body, "badParam") {
+		t.Fatalf("invalid: %d %s", resp.StatusCode, body)
+	}
+	if resp, _ := do(t, srv, "PUT", "/api/v1/mediamtx/paths/x", auth, `{}`); resp.StatusCode != 400 {
+		t.Fatalf("missing conf: %d", resp.StatusCode)
+	}
+	if resp, _ := do(t, srv, "PUT", "/api/v1/mediamtx/paths/x", "", `{"conf":{}}`); resp.StatusCode != 401 {
+		t.Fatalf("anonymous: %d", resp.StatusCode)
+	}
+}

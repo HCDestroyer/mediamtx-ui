@@ -88,6 +88,8 @@ export function createDemoAgentTransport(now: () => number = Date.now): Transpor
   });
   // Additional MediaMTX configuration file, with the same one-step undo as the real agent.
   const mtx = { overlay: "", prev: null as string | null };
+  /** Path changes received, in order: lets tests check what the panel persisted. */
+  const mtxPaths: string[] = [];
   const mtxState = (): MtxConfigState => ({
     basePath: "/etc/mediamtx/mediamtx.yml", baseFound: true, outPath: "/etc/nodo/nodo/mediamtx/mediamtx.yml",
     outFound: true, overlay: mtx.overlay, validator: true, canUndo: mtx.prev !== null,
@@ -139,6 +141,7 @@ export function createDemoAgentTransport(now: () => number = Date.now): Transpor
 
     if (path === "/api/v1/info") return ok({ version: "0.1.0-demo", ffmpeg: "ffmpeg version 6.1.1", mediamtx: true, startedAt: Math.floor(now() / 1000) });
     if (path === "/api/v1/mediamtx/config" && method === "GET") return ok(mtxState());
+    if (path === "/api/v1/mediamtx/_paths") return ok(mtxPaths); // demo only
     if (path === "/api/v1/mediamtx/validate" && method === "POST") {
       const overlay = (request.body as { overlay?: string }).overlay ?? "";
       const problem = mtxProblem(overlay);
@@ -157,6 +160,13 @@ export function createDemoAgentTransport(now: () => number = Date.now): Transpor
       mtx.overlay = mtx.prev;
       mtx.prev = null;
       return ok(mtxState());
+    }
+    if (path.startsWith("/api/v1/mediamtx/paths/") && ["PUT", "PATCH", "DELETE"].includes(method)) {
+      const conf = (request.body as { conf?: Record<string, unknown> } | undefined)?.conf;
+      if (method !== "DELETE" && !conf) return fail(400, "conf is required");
+      if (conf && "badParam" in conf) return fail(422, `json: unknown field "badParam"`);
+      mtxPaths.push(`${method} ${decodeURIComponent(path.slice("/api/v1/mediamtx/paths/".length))}`);
+      return ok(null, 204);
     }
     if (path === "/api/v1/services" && method === "GET") return ok([...sims.values()].map(view));
     if (path === "/api/v1/services" && method === "POST") {

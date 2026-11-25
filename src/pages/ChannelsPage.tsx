@@ -1,6 +1,6 @@
-import { useDeferredValue, useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useDeferredValue, useEffect, useMemo, useState } from "react";
 import { Alert, Button, Card, EmptyState, SearchField, Skeleton, Table, Tabs, useOverlayState } from "@heroui/react";
-import { ArrowDown, ArrowUp, Eye, Plus, Radio, Shuffle } from "lucide-react";
+import { ArrowDown, ArrowUp, Eye, FileText, Plus, Radio, Shuffle } from "lucide-react";
 import { PathEditor } from "../components/PathEditor";
 import { TranscodeWizard } from "../components/TranscodeWizard";
 import { ChannelStatusChip, DynamicChip, videoSummary } from "../components/ChannelChips";
@@ -16,6 +16,8 @@ import { hrefFor } from "../router";
 import { fmt, t } from "../i18n/es";
 import { DESKTOP_QUERY, useMediaQuery } from "../hooks/useMediaQuery";
 import { usePrefs } from "../store/prefs";
+
+const ExportDialog = lazy(() => import("../components/ExportDialog"));
 
 type Filter = "all" | "live" | "offline";
 
@@ -66,6 +68,7 @@ export default function ChannelsPage() {
   const desktop = useMediaQuery(DESKTOP_QUERY);
   const editor = useOverlayState();
   const wizard = useOverlayState();
+  const exporter = useOverlayState();
 
   const rows = useMemo(
     () => applyFilter(data.channels, filter, deferredQuery),
@@ -113,6 +116,10 @@ export default function ChannelsPage() {
         </p>
        </div>
        <div className="flex gap-2">
+        <Button variant="ghost" onPress={exporter.open} isDisabled={connecting} className="max-lg:hidden">
+          <FileText size={16} aria-hidden />
+          {t.unsaved.export}
+        </Button>
         <Button variant="secondary" onPress={wizard.open} isDisabled={connecting}>
           <Shuffle size={16} aria-hidden />
           {t.transcode.open}
@@ -136,6 +143,11 @@ export default function ChannelsPage() {
       </Button>
       <PathEditor state={editor} target={{ kind: "new" }} />
       <TranscodeWizard state={wizard} />
+      {exporter.isOpen && server ? (
+        <Suspense fallback={null}>
+          <ExportDialog state={exporter} serverName={server.name} />
+        </Suspense>
+      ) : null}
 
       {data.error ? (
         <Alert status={data.error === "auth" ? "warning" : "danger"}>

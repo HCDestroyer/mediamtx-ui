@@ -1,3 +1,4 @@
+import { encodePathName } from "../mediamtx/api";
 import { getTransport, isMixedContentBlocked, type Transport } from "../http";
 import type { AgentInfo, AgentService, AgentView, MtxConfigState, MtxValidation } from "./types";
 
@@ -53,6 +54,10 @@ export interface AgentClient {
   /** Validates and applies; rejects with AgentError(422) and the reason when it is invalid. */
   mtxApply(overlay: string): Promise<MtxConfigState>;
   mtxUndo(): Promise<MtxConfigState>;
+  /** Keep a path of the MediaMTX configuration in the additional file (add, change, remove). */
+  mtxPathSet(name: string, conf: Record<string, unknown>): Promise<void>;
+  mtxPathPatch(name: string, conf: Record<string, unknown>): Promise<void>;
+  mtxPathRemove(name: string): Promise<void>;
   list(): Promise<AgentView[]>;
   create(service: Omit<AgentService, "id"> & { id?: string }): Promise<AgentView>;
   update(service: AgentService): Promise<AgentView>;
@@ -72,7 +77,7 @@ export function createAgentClient(options: AgentClientOptions): AgentClient {
 
   let session = sessionCache.get(cacheKey(base, options.credentials)) ?? "";
 
-  async function send<T>(method: "GET" | "POST" | "PUT" | "DELETE", path: string, body: unknown, bearer: string): Promise<T> {
+  async function send<T>(method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE", path: string, body: unknown, bearer: string): Promise<T> {
     if (isMixedContentBlocked(base, options.pageProtocol)) {
       throw new AgentError(MIXED_CONTENT, "mixed content", null);
     }
@@ -106,7 +111,7 @@ export function createAgentClient(options: AgentClientOptions): AgentClient {
   }
 
   /** Authenticated call: session first, the API token as the alternative; one re-login on 401. */
-  async function call<T>(method: "GET" | "POST" | "PUT" | "DELETE", path: string, body?: unknown): Promise<T> {
+  async function call<T>(method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE", path: string, body?: unknown): Promise<T> {
     const useSession = Boolean(options.credentials) && !options.token;
     if (useSession && !session) await startSession();
     try {
@@ -137,6 +142,9 @@ export function createAgentClient(options: AgentClientOptions): AgentClient {
     mtxValidate: (overlay) => call<MtxValidation>("POST", "/api/v1/mediamtx/validate", { overlay }),
     mtxApply: (overlay) => call<MtxConfigState>("PUT", "/api/v1/mediamtx/config", { overlay }),
     mtxUndo: () => call<MtxConfigState>("POST", "/api/v1/mediamtx/undo"),
+    mtxPathSet: async (name, conf) => void (await call("PUT", `/api/v1/mediamtx/paths/${encodePathName(name)}`, { conf })),
+    mtxPathPatch: async (name, conf) => void (await call("PATCH", `/api/v1/mediamtx/paths/${encodePathName(name)}`, { conf })),
+    mtxPathRemove: async (name) => void (await call("DELETE", `/api/v1/mediamtx/paths/${encodePathName(name)}`)),
     list: () => call<AgentView[]>("GET", "/api/v1/services"),
     create: (service) => call<AgentView>("POST", "/api/v1/services", service),
     update: (service) => call<AgentView>("PUT", `/api/v1/services/${enc(service.id)}`, service),

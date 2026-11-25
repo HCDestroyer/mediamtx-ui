@@ -61,6 +61,9 @@ func New(cfg Config, mgr *service.Manager) http.Handler {
 	s.mux.HandleFunc("PUT /api/v1/mediamtx/config", s.auth(s.mtxApply))
 	s.mux.HandleFunc("POST /api/v1/mediamtx/validate", s.auth(s.mtxValidate))
 	s.mux.HandleFunc("POST /api/v1/mediamtx/undo", s.auth(s.mtxUndo))
+	s.mux.HandleFunc("PUT /api/v1/mediamtx/paths/{name...}", s.auth(s.mtxPath("set")))
+	s.mux.HandleFunc("PATCH /api/v1/mediamtx/paths/{name...}", s.auth(s.mtxPath("patch")))
+	s.mux.HandleFunc("DELETE /api/v1/mediamtx/paths/{name...}", s.auth(s.mtxPath("remove")))
 	s.mux.HandleFunc("GET /api/v1/auth/status", s.authStatus)
 	s.mux.HandleFunc("POST /api/v1/auth/setup", s.authSetup)
 	s.mux.HandleFunc("POST /api/v1/auth/login", s.authLogin)
@@ -97,7 +100,7 @@ func (s *Server) cors(next http.Handler) http.Handler {
 				h.Add("Vary", "Origin")
 			}
 			h.Set("Access-Control-Allow-Headers", "Authorization, Content-Type")
-			h.Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+			h.Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
 			h.Set("Access-Control-Max-Age", "600")
 		}
 		if r.Method == http.MethodOptions { // preflight carries no credentials
@@ -518,4 +521,40 @@ func (s *Server) mtxUndo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.mtxState(w, r)
+}
+
+// mtxPath keeps a path of the MediaMTX configuration in the additional file, so a channel created or
+// changed from the panel survives a restart. The body is {"conf": {...}} (not used for removal).
+func (s *Server) mtxPath(op string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !s.mtxEnabled(w) {
+			return
+		}
+		name := r.PathValue("name")
+		var err error
+		if op == "remove" {
+			err = s.cfg.MediaMTX.RemovePath(name)
+		} else {
+			var body struct {
+				Conf map[string]any `json:"conf"`
+			}
+			if !decodeBodyMax(w, r, &body, 1<<20) {
+				return
+			}
+			if body.Conf == nil {
+				writeError(w, http.StatusBadRequest, "conf is required")
+				return
+			}
+			if op == "set" {
+				err = s.cfg.MediaMTX.SetPath(name, body.Conf)
+			} else {
+				err = s.cfg.MediaMTX.PatchPath(name, body.Conf)
+			}
+		}
+		if err != nil {
+			mtxFailure(w, err)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}
 }

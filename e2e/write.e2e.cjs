@@ -69,10 +69,9 @@ const check = (n, ok, x = '') => log.push(`${ok ? 'PASS' : 'FAIL'} ${n} ${x}`);
   await page.waitForSelector('text=camara_nueva', { timeout: 8000 });
   check('created channel appears in the list', (await list()).includes('camara_nueva'), (await list()).join(','));
 
-  // unsaved banner
-  await page.waitForSelector('text=no están en mediamtx.yml');
-  check('unsaved-changes banner appears', true);
-  await page.screenshot({ path: SHOTS + '/p3-banner-desktop.png' });
+  // the demo server has an agent, so the change is also kept in its additional file: no "unsaved" warning
+  await page.waitForTimeout(500);
+  check('no unsaved banner when the agent persisted the change', !(await page.innerText('body')).includes('no están en mediamtx.yml'));
 
   // ---- edit ----
   await page.locator('table tbody tr', { hasText: 'canal63' }).first().click();
@@ -146,7 +145,7 @@ const check = (n, ok, x = '') => log.push(`${ok ? 'PASS' : 'FAIL'} ${n} ${x}`);
   check('deleted channel is gone from the list', !(await list()).includes('prueba_hls'));
 
   // ---- export YAML ----
-  await page.getByRole('button', { name: 'Exportar YAML' }).click();
+  await page.getByRole('button', { name: 'Exportar YAML' }).first().click();
   await dialog().locator('pre').waitFor();
   const exported = await dialog().locator('pre').innerText();
   check('export: paths section, header and changed channels', /^# Exportado por Nodo/.test(exported) && /paths:/.test(exported) && /camara_nueva_480:/.test(exported) && /canal63:/.test(exported) && !/prueba_hls/.test(exported));
@@ -157,9 +156,6 @@ const check = (n, ok, x = '') => log.push(`${ok ? 'PASS' : 'FAIL'} ${n} ${x}`);
   const clip = await page.evaluate(() => navigator.clipboard.readText());
   check('export: copied YAML has the real values', clip.includes('demo-passphrase-1') && clip.includes('lectura-1234567'));
   await page.keyboard.press('Escape');
-  await page.getByRole('button', { name: 'Ya lo guardé' }).click();
-  await page.waitForFunction(() => !document.body.innerText.includes('no están en mediamtx.yml'));
-  check('banner can be dismissed', true);
   check('no page errors (desktop)', errors.length === 0, errors.join('|'));
 
   // ---- mobile ----

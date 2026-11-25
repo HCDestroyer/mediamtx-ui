@@ -445,6 +445,8 @@ export const es = {
     failed: "No se pudo aplicar",
     unsaved: "Cambios sin aplicar",
     saved: "Aplicada",
+    notPersisted: "El cambio está activo pero no se guardó en el archivo adicional",
+    notPersistedWhy: "Se perderá al reiniciar MediaMTX. Revisa la configuración del agente.",
   },
   settings: {
     title: "Ajustes",

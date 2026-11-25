@@ -122,6 +122,7 @@ sudo nodo-agent init -mediamtx-conf /etc/mediamtx/mediamtx.yml -mediamtx-bin /us
 - A candidate is checked before anything changes: valid YAML, well-formed path names and, with `-mediamtx-bin`,
   `mediamtx --validate-conf`. If it fails, the API answers 422 with MediaMTX's message and the running
   file is not touched. One step of undo is kept; regenerating (start-up, after editing your file) never erases it.
+- Channels created, edited or deleted from the panel are also written to the additional file (`PUT/PATCH/DELETE /api/v1/mediamtx/paths/<name>`), so they survive a MediaMTX restart. The live change goes first through MediaMTX's own API; a path that only exists in the additional file is dropped on delete, one defined in your file gets a `null` that removes it from the generated file.
 - Not verified against a real MediaMTX binary yet: the tests use a stand-in that implements `--validate-conf`.
 
 ## API
@@ -133,6 +134,7 @@ All `/api/v1` routes except `auth/status`, `auth/login` and `auth/setup` need `A
 | `GET /api/v1/auth/status` | public: `{agent, accounts, setup}` |
 | `POST /api/v1/auth/setup` · `login` · `password` | first account (API token), login, change password |
 | `GET/PUT /api/v1/mediamtx/config` | state of the files / validate and apply `{overlay}` (422 + reason when invalid) |
+| `PUT/PATCH/DELETE /api/v1/mediamtx/paths/<name>` | keep one path in the additional file (`{conf}`) |
 | `POST /api/v1/mediamtx/validate` · `undo` | check a candidate without saving / back one step |
 | `GET /api/v1/info` | version, FFmpeg found |
 | `GET /api/v1/services` | every service with its status |
