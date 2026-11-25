@@ -1,6 +1,8 @@
 import { encodePathName } from "../mediamtx/api";
 import { getTransport, isMixedContentBlocked, type Transport } from "../http";
-import type { AgentInfo, AgentService, AgentView, MtxConfigState, MtxValidation } from "./types";
+import type {
+  AgentInfo, AgentService, AgentView, BinariesState, MediaMtxBinaries, MtxConfigState, MtxValidation, ProcessView,
+} from "./types";
 
 export class AgentError extends Error {
   readonly status: number;
@@ -54,6 +56,15 @@ export interface AgentClient {
   /** Validates and applies; rejects with AgentError(422) and the reason when it is invalid. */
   mtxApply(overlay: string): Promise<MtxConfigState>;
   mtxUndo(): Promise<MtxConfigState>;
+  binaries(): Promise<BinariesState>;
+  /** Asks the release server for the newest MediaMTX version. */
+  latestMediaMtx(): Promise<string>;
+  /** Downloads, verifies and installs a version ("latest" or a tag); can take a minute. */
+  installMediaMtx(version: string): Promise<MediaMtxBinaries>;
+  useMediaMtx(version: string): Promise<MediaMtxBinaries>;
+  removeMediaMtx(version: string): Promise<MediaMtxBinaries>;
+  mediaMtxProcess(lines?: number): Promise<ProcessView>;
+  controlMediaMtx(action: "start" | "stop" | "restart"): Promise<ProcessView>;
   /** Keep a path of the MediaMTX configuration in the additional file (add, change, remove). */
   mtxPathSet(name: string, conf: Record<string, unknown>): Promise<void>;
   mtxPathPatch(name: string, conf: Record<string, unknown>): Promise<void>;
@@ -77,7 +88,13 @@ export function createAgentClient(options: AgentClientOptions): AgentClient {
 
   let session = sessionCache.get(cacheKey(base, options.credentials)) ?? "";
 
-  async function send<T>(method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE", path: string, body: unknown, bearer: string): Promise<T> {
+  async function send<T>(
+    method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE",
+    path: string,
+    body: unknown,
+    bearer: string,
+    timeoutMs?: number,
+  ): Promise<T> {
     if (isMixedContentBlocked(base, options.pageProtocol)) {
       throw new AgentError(MIXED_CONTENT, "mixed content", null);
     }
@@ -88,7 +105,7 @@ export function createAgentClient(options: AgentClientOptions): AgentClient {
         method,
         headers: bearer ? { Authorization: `Bearer ${bearer}` } : {},
         body,
-        timeoutMs: options.timeoutMs ?? 6000,
+        timeoutMs: timeoutMs ?? options.timeoutMs ?? 6000,
       });
     } catch {
       throw new AgentError(UNREACHABLE, "agent unreachable", null);
@@ -111,15 +128,20 @@ export function createAgentClient(options: AgentClientOptions): AgentClient {
   }
 
   /** Authenticated call: session first, the API token as the alternative; one re-login on 401. */
-  async function call<T>(method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE", path: string, body?: unknown): Promise<T> {
+  async function call<T>(
+    method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE",
+    path: string,
+    body?: unknown,
+    timeoutMs?: number,
+  ): Promise<T> {
     const useSession = Boolean(options.credentials) && !options.token;
     if (useSession && !session) await startSession();
     try {
-      return await send<T>(method, path, body, useSession ? session : (options.token ?? ""));
+      return await send<T>(method, path, body, useSession ? session : (options.token ?? ""), timeoutMs);
     } catch (error) {
       if (!(useSession && error instanceof AgentError && error.status === 401)) throw error;
       await startSession(); // the session expired or the password changed elsewhere
-      return send<T>(method, path, body, session);
+      return send<T>(method, path, body, session, timeoutMs);
     }
   }
 
@@ -142,6 +164,14 @@ export function createAgentClient(options: AgentClientOptions): AgentClient {
     mtxValidate: (overlay) => call<MtxValidation>("POST", "/api/v1/mediamtx/validate", { overlay }),
     mtxApply: (overlay) => call<MtxConfigState>("PUT", "/api/v1/mediamtx/config", { overlay }),
     mtxUndo: () => call<MtxConfigState>("POST", "/api/v1/mediamtx/undo"),
+    binaries: () => call<BinariesState>("GET", "/api/v1/binaries"),
+    latestMediaMtx: async () => (await call<{ version: string }>("GET", "/api/v1/binaries/mediamtx/latest")).version,
+    // Installing downloads tens of MB and verifies them: give it far more than the usual timeout.
+    installMediaMtx: (version) => call<MediaMtxBinaries>("POST", "/api/v1/binaries/mediamtx/install", { version }, 12 * 60_000),
+    useMediaMtx: (version) => call<MediaMtxBinaries>("POST", "/api/v1/binaries/mediamtx/use", { version }),
+    removeMediaMtx: (version) => call<MediaMtxBinaries>("DELETE", `/api/v1/binaries/mediamtx/${enc(version)}`),
+    mediaMtxProcess: (lines = 200) => call<ProcessView>("GET", `/api/v1/mediamtx/process?lines=${lines}`),
+    controlMediaMtx: (action) => call<ProcessView>("POST", `/api/v1/mediamtx/process/${action}`),
     mtxPathSet: async (name, conf) => void (await call("PUT", `/api/v1/mediamtx/paths/${encodePathName(name)}`, { conf })),
     mtxPathPatch: async (name, conf) => void (await call("PATCH", `/api/v1/mediamtx/paths/${encodePathName(name)}`, { conf })),
     mtxPathRemove: async (name) => void (await call("DELETE", `/api/v1/mediamtx/paths/${encodePathName(name)}`)),

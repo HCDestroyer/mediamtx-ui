@@ -1,6 +1,6 @@
 import type { HttpRequest, HttpResponse, Transport } from "../http";
 import type {
-  MtxConfigState, AgentEvent, AgentInputStatus, AgentMapEntry, AgentProfile, AgentProgram, AgentService, AgentStatus, AgentView,
+  BinariesState, MtxConfigState, ProcessStatus, AgentEvent, AgentInputStatus, AgentMapEntry, AgentProfile, AgentProgram, AgentService, AgentStatus, AgentView,
 } from "./types";
 
 /** Agent URL of the demo server; the demo transport answers by path and ignores the host. */
@@ -100,6 +100,28 @@ export function createDemoAgentTransport(now: () => number = Date.now): Transpor
     const bad = /^\s*(badParam|unknownParam)\s*:/m.exec(overlay);
     return bad ? `json: unknown field "${bad[1]}"` : null;
   };
+  // MediaMTX binaries and the supervised process.
+  const bins = { installed: ["v1.21.4", "v1.20.2"], current: "v1.21.4", enabled: true, running: true, restarts: 0, startedAt: now() - 2 * 3600_000 };
+  const procLogs = ["--- started v1.21.4", "INF MediaMTX v1.21.4", "INF [API] listener opened on :9997", "INF [RTSP] listener opened on :8554 (TCP)"];
+  const versionOf = (v: string) => /^v\d+\.\d+\.\d+$/.test(v);
+  const newest = () => [...bins.installed, "v1.21.5"].sort().at(-1)!;
+  const procStatus = (): ProcessStatus => ({
+    state: bins.running ? "running" : "stopped", enabled: bins.enabled, restarts: bins.restarts,
+    ...(bins.running ? { pid: 4242, since: Math.floor(bins.startedAt / 1000), binary: `/etc/nodo/nodo/bin/mediamtx/versions/${bins.current}/mediamtx` } : {}),
+  });
+  const binSnapshot = () => ({ installed: [...bins.installed].sort().reverse(), current: bins.current, process: procStatus() });
+  const binState = (): BinariesState => ({
+    mediamtx: binSnapshot(),
+    tools: [
+      { id: "ffmpeg", found: true, path: "/usr/bin/ffmpeg", version: "ffmpeg version 6.1.1" },
+      { id: "tsduck", found: false },
+      { id: "dvblast", found: false },
+    ],
+  });
+  const restartLog = () => {
+    bins.startedAt = now();
+    procLogs.push(`--- started ${bins.current}`, `INF MediaMTX ${bins.current}`);
+  };
   const first = start(INITIAL);
   first.startedAt = now() - 3 * 3600_000;
   sims.set(INITIAL.id, first);
@@ -140,6 +162,45 @@ export function createDemoAgentTransport(now: () => number = Date.now): Transpor
     if (request.headers?.Authorization !== `Bearer ${DEMO_AGENT_TOKEN}`) return fail(401, "missing or wrong token");
 
     if (path === "/api/v1/info") return ok({ version: "0.1.0-demo", ffmpeg: "ffmpeg version 6.1.1", mediamtx: true, startedAt: Math.floor(now() / 1000) });
+    if (path === "/api/v1/binaries" && method === "GET") return ok(binState());
+    if (path === "/api/v1/binaries/mediamtx/latest") return ok({ version: newest() });
+    if (path === "/api/v1/binaries/mediamtx/install" && method === "POST") {
+      let version = (request.body as { version?: string }).version ?? "";
+      if (version === "latest" || version === "") version = newest();
+      if (!versionOf(version)) return fail(400, "the version must look like v1.21.4");
+      if (version > "v1.21.5") return fail(502, "download failed: status 404");
+      if (!bins.installed.includes(version)) bins.installed.push(version);
+      return ok(binSnapshot());
+    }
+    if (path === "/api/v1/binaries/mediamtx/use" && method === "POST") {
+      const version = (request.body as { version?: string }).version ?? "";
+      if (!bins.installed.includes(version)) return fail(404, "that version is not installed");
+      bins.current = version;
+      if (bins.enabled) restartLog();
+      return ok(binSnapshot());
+    }
+    const removal = /^\/api\/v1\/binaries\/mediamtx\/(v[^/]+)$/.exec(path);
+    if (removal && method === "DELETE") {
+      const version = decodeURIComponent(removal[1]!);
+      if (version === bins.current) return fail(409, "that version is the one in use; switch to another first");
+      if (!bins.installed.includes(version)) return fail(404, "that version is not installed");
+      bins.installed = bins.installed.filter((v) => v !== version);
+      return ok(binSnapshot());
+    }
+    if (path === "/api/v1/mediamtx/process" && method === "GET") return ok({ status: procStatus(), logs: [...procLogs] });
+    const control = /^\/api\/v1\/mediamtx\/process\/(start|stop|restart)$/.exec(path);
+    if (control && method === "POST") {
+      if (control[1] === "stop") {
+        bins.enabled = false;
+        bins.running = false;
+        procLogs.push("--- stopped");
+      } else {
+        bins.enabled = true;
+        bins.running = true;
+        restartLog();
+      }
+      return ok({ status: procStatus(), logs: [...procLogs] });
+    }
     if (path === "/api/v1/mediamtx/config" && method === "GET") return ok(mtxState());
     if (path === "/api/v1/mediamtx/_paths") return ok(mtxPaths); // demo only
     if (path === "/api/v1/mediamtx/validate" && method === "POST") {

@@ -132,3 +132,44 @@ export interface MtxConfigState {
 }
 
 export type MtxValidation = { ok: true; merged: string } | { ok: false; error: string };
+
+/** MediaMTX running as a child of the agent. */
+export interface ProcessStatus {
+  state: "stopped" | "running" | "crashed";
+  /** The operator wants it running (it comes back after an agent restart). */
+  enabled: boolean;
+  pid?: number;
+  /** Unix seconds when the current process started. */
+  since?: number;
+  restarts: number;
+  lastExit?: string;
+  binary?: string;
+}
+
+export interface MediaMtxBinaries {
+  /** Newest first. */
+  installed: string[];
+  /** Selected version, or an empty string. */
+  current: string;
+  /** Absent when the agent cannot run MediaMTX (no managed configuration). */
+  process?: ProcessStatus;
+}
+
+export type ToolId = "ffmpeg" | "tsduck" | "dvblast";
+
+export interface ToolInfo {
+  id: ToolId;
+  found: boolean;
+  path?: string;
+  version?: string;
+}
+
+export interface BinariesState {
+  mediamtx: MediaMtxBinaries;
+  tools: ToolInfo[];
+}
+
+export interface ProcessView {
+  status: ProcessStatus;
+  logs: string[];
+}

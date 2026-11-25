@@ -148,3 +148,34 @@ describe("MediaMTX configuration calls", () => {
     expect(error).toMatchObject({ status: 422, detail: 'json: unknown field "badParam"' });
   });
 });
+
+describe("binaries calls", () => {
+  it("uses the documented routes", async () => {
+    const { client, calls } = fake(() => ({ status: 200, data: { version: "v1.21.4" } }));
+    await client.binaries();
+    expect(await client.latestMediaMtx()).toBe("v1.21.4");
+    await client.installMediaMtx("latest");
+    await client.useMediaMtx("v1.21.4");
+    await client.removeMediaMtx("v1.20.2");
+    await client.mediaMtxProcess(50);
+    await client.controlMediaMtx("restart");
+    expect(calls.map((c) => `${c.method} ${new URL(c.url).pathname}${new URL(c.url).search}`)).toEqual([
+      "GET /api/v1/binaries",
+      "GET /api/v1/binaries/mediamtx/latest",
+      "POST /api/v1/binaries/mediamtx/install",
+      "POST /api/v1/binaries/mediamtx/use",
+      "DELETE /api/v1/binaries/mediamtx/v1.20.2",
+      "GET /api/v1/mediamtx/process?lines=50",
+      "POST /api/v1/mediamtx/process/restart",
+    ]);
+    expect(calls[2]?.body).toEqual({ version: "latest" });
+  });
+
+  it("gives an install far more time than a normal call", async () => {
+    const { client, calls } = fake(() => ({ status: 200, data: {} }));
+    await client.installMediaMtx("v1.21.4");
+    await client.binaries();
+    expect(calls[0]?.timeoutMs).toBeGreaterThanOrEqual(10 * 60_000);
+    expect(calls[1]?.timeoutMs).toBeLessThanOrEqual(10_000);
+  });
+});
