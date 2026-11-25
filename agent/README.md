@@ -125,6 +125,27 @@ sudo nodo-agent init -mediamtx-conf /etc/mediamtx/mediamtx.yml -mediamtx-bin /us
 - Channels created, edited or deleted from the panel are also written to the additional file (`PUT/PATCH/DELETE /api/v1/mediamtx/paths/<name>`), so they survive a MediaMTX restart. The live change goes first through MediaMTX's own API; a path that only exists in the additional file is dropped on delete, one defined in your file gets a `null` that removes it from the generated file.
 - Not verified against a real MediaMTX binary yet: the tests use a stand-in that implements `--validate-conf`.
 
+## Binaries and the MediaMTX process
+
+The agent can install MediaMTX itself and, optionally, run it (needs `-mediamtx-conf`, so there is a generated file to run with):
+
+- **Install.** `POST /api/v1/binaries/mediamtx/install {"version":"latest"|"v1.21.4"}` downloads the official
+  `mediamtx_<tag>_linux_<amd64|arm64|armv7>.tar.gz`, checks its SHA-256 against the release's `checksums.sha256`,
+  extracts only the `mediamtx` binary, and runs `mediamtx --version` to make sure it works here and is the version asked for.
+  Nothing is installed if any step fails. The checksum list comes from the same release, so it detects corruption and
+  partial downloads but trusts GitHub; use your own mirror (not configurable yet) if that is not enough.
+- **Versions side by side** in `<data>/bin/mediamtx/versions/<tag>/`, selected through an atomically replaced `current` link.
+  Switching back is one call; the version in use cannot be deleted.
+- **Run it.** `POST /api/v1/mediamtx/process/{start|stop|restart}` runs `current/mediamtx <data>/mediamtx/mediamtx.yml`
+  as a child of the agent in its own process group, restarts it with backoff if it dies, keeps its last 500 output lines
+  (`GET /api/v1/mediamtx/process`), and remembers whether it should be running. Switching versions restarts it on the new one.
+  Configuration changes need no restart: MediaMTX reloads the file itself.
+- **Trade-off.** MediaMTX is a child of the agent, so restarting the agent restarts MediaMTX. If you prefer to keep
+  your own systemd unit for MediaMTX, simply never press start: the manager and the additional file work without it.
+- `GET /api/v1/binaries` also reports FFmpeg, TSDuck (`tsp`) and dvblast: found, path and version.
+- Not verified here against GitHub or a real MediaMTX (this environment blocks both); the tests use a stand-in release server
+  and scripts that behave like `mediamtx --version`.
+
 ## API
 
 All `/api/v1` routes except `auth/status`, `auth/login` and `auth/setup` need `Authorization: Bearer <session or API token>`.
@@ -136,6 +157,9 @@ All `/api/v1` routes except `auth/status`, `auth/login` and `auth/setup` need `A
 | `GET/PUT /api/v1/mediamtx/config` | state of the files / validate and apply `{overlay}` (422 + reason when invalid) |
 | `PUT/PATCH/DELETE /api/v1/mediamtx/paths/<name>` | keep one path in the additional file (`{conf}`) |
 | `POST /api/v1/mediamtx/validate` · `undo` | check a candidate without saving / back one step |
+| `GET /api/v1/binaries` · `/binaries/mediamtx/latest` | versions, tools found / newest release |
+| `POST /api/v1/binaries/mediamtx/install` · `use` · `DELETE /binaries/mediamtx/<tag>` | install, select, remove a version |
+| `GET /api/v1/mediamtx/process` · `POST /mediamtx/process/{start,stop,restart}` | run MediaMTX from the agent |
 | `GET /api/v1/info` | version, FFmpeg found |
 | `GET /api/v1/services` | every service with its status |
 | `POST /api/v1/services` | create (the id is derived from the name when omitted) |

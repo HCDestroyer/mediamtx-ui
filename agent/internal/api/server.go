@@ -2,6 +2,7 @@
 package api
 
 import (
+	"context"
 	"crypto/subtle"
 	"encoding/json"
 	"errors"
@@ -14,8 +15,10 @@ import (
 	"time"
 
 	"nodo/agent/internal/auth"
+	"nodo/agent/internal/binaries"
 	"nodo/agent/internal/mtxconf"
 	"nodo/agent/internal/service"
+	"nodo/agent/internal/supervisor"
 )
 
 // Info is shown by GET /api/v1/info.
@@ -40,6 +43,11 @@ type Config struct {
 	Limiter *auth.Limiter
 	// MediaMTX manages the additional MediaMTX configuration file; nil disables /api/v1/mediamtx.
 	MediaMTX *mtxconf.Manager
+	// Binaries installs MediaMTX versions; Supervisor runs the selected one. Either may be nil.
+	Binaries   *binaries.Manager
+	Supervisor *supervisor.Supervisor
+	// FFmpeg is the FFmpeg binary (or name) reported by /binaries.
+	FFmpeg string
 }
 
 // Server holds the routes.
@@ -64,6 +72,13 @@ func New(cfg Config, mgr *service.Manager) http.Handler {
 	s.mux.HandleFunc("PUT /api/v1/mediamtx/paths/{name...}", s.auth(s.mtxPath("set")))
 	s.mux.HandleFunc("PATCH /api/v1/mediamtx/paths/{name...}", s.auth(s.mtxPath("patch")))
 	s.mux.HandleFunc("DELETE /api/v1/mediamtx/paths/{name...}", s.auth(s.mtxPath("remove")))
+	s.mux.HandleFunc("GET /api/v1/binaries", s.auth(s.binList))
+	s.mux.HandleFunc("GET /api/v1/binaries/mediamtx/latest", s.auth(s.binLatest))
+	s.mux.HandleFunc("POST /api/v1/binaries/mediamtx/install", s.auth(s.binInstall))
+	s.mux.HandleFunc("POST /api/v1/binaries/mediamtx/use", s.auth(s.binUse))
+	s.mux.HandleFunc("DELETE /api/v1/binaries/mediamtx/{version}", s.auth(s.binRemove))
+	s.mux.HandleFunc("GET /api/v1/mediamtx/process", s.auth(s.procStatus))
+	s.mux.HandleFunc("POST /api/v1/mediamtx/process/{action}", s.auth(s.procAction))
 	s.mux.HandleFunc("GET /api/v1/auth/status", s.authStatus)
 	s.mux.HandleFunc("POST /api/v1/auth/setup", s.authSetup)
 	s.mux.HandleFunc("POST /api/v1/auth/login", s.authLogin)
@@ -557,4 +572,164 @@ func (s *Server) mtxPath(op string) http.HandlerFunc {
 		}
 		w.WriteHeader(http.StatusNoContent)
 	}
+}
+
+// ---- binaries and the MediaMTX process ----
+
+func (s *Server) binEnabled(w http.ResponseWriter) bool {
+	if s.cfg.Binaries == nil {
+		writeError(w, http.StatusNotFound, "binary management is not enabled on this agent")
+		return false
+	}
+	return true
+}
+
+func binFailure(w http.ResponseWriter, err error) {
+	switch {
+	case errors.Is(err, binaries.ErrBadVersion):
+		writeError(w, http.StatusBadRequest, err.Error())
+	case errors.Is(err, binaries.ErrNotFound):
+		writeError(w, http.StatusNotFound, err.Error())
+	case errors.Is(err, binaries.ErrBusy), errors.Is(err, binaries.ErrInUse), errors.Is(err, supervisor.ErrNoBinary):
+		writeError(w, http.StatusConflict, err.Error())
+	default:
+		writeError(w, http.StatusBadGateway, err.Error())
+	}
+}
+
+type mediamtxBinaries struct {
+	Installed []string           `json:"installed"`
+	Current   string             `json:"current"`
+	Process   *supervisor.Status `json:"process,omitempty"`
+}
+
+func (s *Server) binSnapshot() mediamtxBinaries {
+	out := mediamtxBinaries{Installed: s.cfg.Binaries.Installed(), Current: s.cfg.Binaries.Current()}
+	if out.Installed == nil {
+		out.Installed = []string{}
+	}
+	if s.cfg.Supervisor != nil {
+		st := s.cfg.Supervisor.Status()
+		out.Process = &st
+	}
+	return out
+}
+
+func (s *Server) binList(w http.ResponseWriter, _ *http.Request) {
+	if !s.binEnabled(w) {
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"mediamtx": s.binSnapshot(), "tools": binaries.Tools(s.cfg.FFmpeg)})
+}
+
+func (s *Server) binLatest(w http.ResponseWriter, r *http.Request) {
+	if !s.binEnabled(w) {
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
+	defer cancel()
+	tag, err := s.cfg.Binaries.Latest(ctx)
+	if err != nil {
+		binFailure(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"version": tag})
+}
+
+type versionBody struct {
+	Version string `json:"version"`
+}
+
+// binInstall downloads and verifies a version ("latest" or a tag). It can take a while, so it holds the
+// request open; the panel shows a spinner.
+func (s *Server) binInstall(w http.ResponseWriter, r *http.Request) {
+	if !s.binEnabled(w) {
+		return
+	}
+	var body versionBody
+	if !decodeBody(w, r, &body) {
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Minute)
+	defer cancel()
+	if _, err := s.cfg.Binaries.Install(ctx, body.Version); err != nil {
+		binFailure(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, s.binSnapshot())
+}
+
+// binUse selects a version and, when MediaMTX is running under the agent, restarts it on that version.
+func (s *Server) binUse(w http.ResponseWriter, r *http.Request) {
+	if !s.binEnabled(w) {
+		return
+	}
+	var body versionBody
+	if !decodeBody(w, r, &body) {
+		return
+	}
+	if err := s.cfg.Binaries.Use(body.Version); err != nil {
+		binFailure(w, err)
+		return
+	}
+	if s.cfg.Supervisor != nil && s.cfg.Supervisor.Status().Enabled {
+		if err := s.cfg.Supervisor.Restart(); err != nil {
+			binFailure(w, err)
+			return
+		}
+	}
+	writeJSON(w, http.StatusOK, s.binSnapshot())
+}
+
+func (s *Server) binRemove(w http.ResponseWriter, r *http.Request) {
+	if !s.binEnabled(w) {
+		return
+	}
+	if err := s.cfg.Binaries.Remove(r.PathValue("version")); err != nil {
+		binFailure(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, s.binSnapshot())
+}
+
+func (s *Server) procEnabled(w http.ResponseWriter) bool {
+	if s.cfg.Supervisor == nil {
+		writeError(w, http.StatusNotFound, "running MediaMTX from the agent needs -mediamtx-conf and binary management")
+		return false
+	}
+	return true
+}
+
+func (s *Server) procStatus(w http.ResponseWriter, r *http.Request) {
+	if !s.procEnabled(w) {
+		return
+	}
+	lines, _ := strconv.Atoi(r.URL.Query().Get("lines"))
+	if lines <= 0 || lines > 500 {
+		lines = 200
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"status": s.cfg.Supervisor.Status(), "logs": s.cfg.Supervisor.Logs(lines)})
+}
+
+func (s *Server) procAction(w http.ResponseWriter, r *http.Request) {
+	if !s.procEnabled(w) {
+		return
+	}
+	var err error
+	switch r.PathValue("action") {
+	case "start":
+		err = s.cfg.Supervisor.Start()
+	case "stop":
+		s.cfg.Supervisor.Stop()
+	case "restart":
+		err = s.cfg.Supervisor.Restart()
+	default:
+		writeError(w, http.StatusNotFound, "unknown action")
+		return
+	}
+	if err != nil {
+		binFailure(w, err)
+		return
+	}
+	s.procStatus(w, r)
 }

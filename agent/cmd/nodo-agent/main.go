@@ -21,10 +21,12 @@ import (
 
 	"nodo/agent/internal/api"
 	"nodo/agent/internal/auth"
+	"nodo/agent/internal/binaries"
 	"nodo/agent/internal/media"
 	"nodo/agent/internal/mtxconf"
 	"nodo/agent/internal/service"
 	"nodo/agent/internal/store"
+	"nodo/agent/internal/supervisor"
 	"nodo/agent/internal/web"
 )
 
@@ -121,6 +123,23 @@ func run(log *slog.Logger, o runOptions) error {
 		}
 	}
 
+	// MediaMTX versions and, when there is a generated configuration, an optional supervised process.
+	bins := binaries.New(filepath.Join(dataDir, "bin", "mediamtx"), binaries.Options{})
+	var sup *supervisor.Supervisor
+	supCtx, stopSup := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stopSup()
+	if mtx != nil {
+		sup = supervisor.New(supCtx, supervisor.Config{
+			Binary:    bins.CurrentBinary,
+			Args:      func() []string { return []string{mtx.OutPath()} },
+			Dir:       filepath.Join(dataDir, "mediamtx"),
+			StatePath: filepath.Join(dataDir, "mediamtx", "supervisor.json"),
+			Log:       log,
+		})
+		sup.Restore()
+		defer sup.Close()
+	}
+
 	cfg := media.Config{FFmpeg: ffmpeg, MediaMTXRTSP: rtsp, MediaMTXUser: mtxUser, MediaMTXPass: os.Getenv("NODO_MEDIAMTX_PASS")}
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
@@ -139,7 +158,7 @@ func run(log *slog.Logger, o runOptions) error {
 	}
 	srv := &http.Server{
 		Addr:              listen,
-		Handler:           api.New(api.Config{Token: token, AllowOrigins: splitList(origins), Info: info, Panel: web.Handler(), Accounts: accounts, MediaMTX: mtx}, mgr),
+		Handler:           api.New(api.Config{Token: token, AllowOrigins: splitList(origins), Info: info, Panel: web.Handler(), Accounts: accounts, MediaMTX: mtx, Binaries: bins, Supervisor: sup, FFmpeg: ffmpeg}, mgr),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 	errc := make(chan error, 1)

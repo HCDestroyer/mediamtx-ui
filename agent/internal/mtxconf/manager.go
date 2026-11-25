@@ -86,6 +86,9 @@ func writeAtomic(path string, data []byte) error {
 	return os.Rename(tmp, path)
 }
 
+// OutPath is the generated file MediaMTX must be started with.
+func (m *Manager) OutPath() string { return m.paths.Out }
+
 // State describes the files for the panel.
 type State struct {
 	BasePath  string `json:"basePath"`
