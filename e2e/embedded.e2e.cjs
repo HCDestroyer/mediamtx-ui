@@ -62,6 +62,27 @@ const check = (n, ok, x = '') => log.push(`${ok ? 'PASS' : 'FAIL'} ${n} ${x}`);
   await page.waitForSelector('text=Servicio eliminado');
   check('service deleted', true);
 
+  // change the agent password from Settings: the stored credentials follow, so the panel keeps working
+  await page.goto(URL + '#/settings');
+  await page.getByRole('button', { name: 'Cambiar contraseña', exact: true }).first().click();
+  const pw = page.getByRole('dialog');
+  await pw.waitFor();
+  await pw.getByRole('button', { name: 'Guardar contraseña' }).click();
+  await page.waitForSelector('text=Escribe la contraseña actual.');
+  await pw.getByLabel('Contraseña actual').fill('not the password');
+  await pw.getByLabel('Contraseña nueva', { exact: true }).fill('second horse battery');
+  await pw.getByLabel('Repetir contraseña').fill('second horse battery');
+  await pw.getByRole('button', { name: 'Guardar contraseña' }).click();
+  await page.waitForSelector('text=La contraseña actual no es correcta.');
+  check('wrong current password is refused', true);
+  await pw.getByLabel('Contraseña actual').fill('correct horse battery');
+  await pw.getByRole('button', { name: 'Guardar contraseña' }).click();
+  await page.waitForSelector('text=Contraseña del agente actualizada');
+  check('password changed on the real agent', true);
+  await page.goto(URL + '#/services');
+  await page.waitForSelector('text=Todavía no hay servicios', { timeout: 10000 });
+  check('the panel keeps working with the stored new password', true);
+
   check('no page errors or failed requests', errors.length === 0, errors.join('|'));
   console.log(log.join('\n'));
   await browser.close();

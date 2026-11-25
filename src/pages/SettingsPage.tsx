@@ -1,12 +1,14 @@
 import { useRef, useState } from "react";
-import { Button, Card, Label, ListBox, Select, Switch, toast } from "@heroui/react";
+import { Button, Card, Label, ListBox, Select, Switch, toast, useOverlayState } from "@heroui/react";
 import { Download, Upload } from "lucide-react";
+import { AgentPasswordOverlay } from "../components/AgentPasswordOverlay";
 import { SecuritySettings } from "../components/auth/SecuritySettings";
 import { exportServers, parseImport } from "../core/serversIO";
 import { fmt, t } from "../i18n/es";
 import { hrefFor } from "../router";
 import { POLL_INTERVALS_MS, usePrefs, type PollIntervalMs, type ThemePref } from "../store/prefs";
 import { useServers } from "../store/servers";
+import { useActiveAgent } from "../hooks/useAgentClient";
 
 const THEMES: Array<{ id: ThemePref; label: string }> = [
   { id: "system", label: t.settings.themeSystem },
@@ -33,6 +35,10 @@ export default function SettingsPage() {
   const addServers = useServers((s) => s.addServers);
   const [includePasswords, setIncludePasswords] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
+  const { server, agent, client } = useActiveAgent();
+  const updateServer = useServers((s) => s.updateServer);
+  const passwordDialog = useOverlayState();
+  const agentUser = server && !server.demo ? agent?.username : undefined;
 
   const doExport = () => {
     download("nodo-servers.json", exportServers(servers, includePasswords));
@@ -61,6 +67,33 @@ export default function SettingsPage() {
   return (
     <div className="flex max-w-2xl flex-col gap-5">
       <h1 className="text-2xl font-bold tracking-tight">{t.settings.title}</h1>
+
+      {server && agentUser && agent && client ? (
+        <Card>
+          <Card.Content className="flex flex-row items-center gap-3">
+            <div className="min-w-0 flex-1">
+              <p className="font-semibold">{t.agentAccount.title}</p>
+              <p className="truncate text-xs text-[var(--muted)]">
+                {fmt(t.agentAccount.help, { server: server.name })} {fmt(t.agentAccount.user, { user: agentUser })}
+              </p>
+            </div>
+            <Button size="sm" variant="secondary" onPress={passwordDialog.open}>
+              {t.agentAccount.change}
+            </Button>
+          </Card.Content>
+          <AgentPasswordOverlay
+            state={passwordDialog}
+            username={agentUser}
+            onChange={async (current, next) => {
+              // The stored credentials must match the agent's, or the next request logs in with the old password.
+              await client.changePassword(current, next);
+              const { id: _id, ...draft } = server;
+              updateServer(server.id, { ...draft, agent: { ...agent, password: next } });
+              toast.success(t.agentAccount.changed);
+            }}
+          />
+        </Card>
+      ) : null}
 
       <Card>
         <Card.Content className="flex flex-row items-center gap-3">
