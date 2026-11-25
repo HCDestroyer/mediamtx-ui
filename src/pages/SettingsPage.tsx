@@ -3,6 +3,7 @@ import { Button, Card, Label, ListBox, Select, Switch, toast, useOverlayState } 
 import { Download, Upload } from "lucide-react";
 import { AgentPasswordOverlay } from "../components/AgentPasswordOverlay";
 import { SecuritySettings } from "../components/auth/SecuritySettings";
+import { shareText } from "../core/native";
 import { exportServers, parseImport } from "../core/serversIO";
 import { fmt, t } from "../i18n/es";
 import { hrefFor } from "../router";
@@ -40,8 +41,10 @@ export default function SettingsPage() {
   const passwordDialog = useOverlayState();
   const agentUser = server && !server.demo ? agent?.username : undefined;
 
-  const doExport = () => {
-    download("nodo-servers.json", exportServers(servers, includePasswords));
+  const doExport = async () => {
+    const text = exportServers(servers, includePasswords);
+    // In the Android app a file download goes nowhere useful: hand the JSON to the share sheet instead.
+    if (!(await shareText(t.settings.shareTitle, text, t.settings.shareDialog).catch(() => false))) download("nodo-servers.json", text);
     toast.success(t.settings.exported);
   };
 

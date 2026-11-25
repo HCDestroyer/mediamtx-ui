@@ -1,0 +1,11 @@
+{
+  "appId": "net.nodo.panel",
+  "appName": "Nodo",
+  "webDir": "dist",
+  "plugins": {
+    "CapacitorHttp": { "enabled": false }
+  },
+  "android": {
+    "allowMixedContent": true
+  }
+}

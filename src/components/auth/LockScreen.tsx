@@ -1,6 +1,7 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { AlertDialog, Button, Card, FieldError, Form, Input, Label, TextField, useOverlayState } from "@heroui/react";
-import { AlertTriangle, Eye, EyeOff, Lock } from "lucide-react";
+import { AlertTriangle, Eye, EyeOff, Fingerprint, Lock } from "lucide-react";
+import { biometric } from "../../core/native";
 import { fmt, t } from "../../i18n/es";
 import { useAuth, waitSeconds } from "../../store/auth";
 
@@ -17,6 +18,23 @@ export default function LockScreen() {
   const [show, setShow] = useState(false);
   const [pending, setPending] = useState(false);
   const [wait, setWait] = useState(waitSeconds);
+  const [bio] = useState(() => biometric.enabled());
+  const tried = useRef(false);
+
+  const tryBiometric = async () => {
+    if (pending) return;
+    const saved = await biometric.unlock(t.auth.biometricsReason);
+    if (saved) await unlock(saved.username, saved.password);
+  };
+
+  // Offer the prompt as soon as the screen appears, once; the password form stays as the fallback.
+  useEffect(() => {
+    if (bio && !tried.current) {
+      tried.current = true;
+      void tryBiometric();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Counts the back-off down once per second.
   useEffect(() => {
@@ -78,6 +96,12 @@ export default function LockScreen() {
             <Button variant="primary" type="submit" fullWidth isPending={pending} isDisabled={wait > 0 || !password}>
               {pending ? t.auth.unlocking : t.auth.unlock}
             </Button>
+            {bio ? (
+              <Button variant="secondary" fullWidth onPress={() => void tryBiometric()}>
+                <Fingerprint size={18} aria-hidden />
+                {t.auth.biometricsUnlock}
+              </Button>
+            ) : null}
           </Form>
 
           <div className="flex flex-col items-center gap-2">

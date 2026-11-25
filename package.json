@@ -9,13 +9,20 @@
     "preview": "vite preview",
     "typecheck": "tsc -b --noEmit",
     "test": "vitest run",
-    "e2e": "node e2e/dashboard.e2e.cjs && node e2e/auth.e2e.cjs"
+    "e2e": "node e2e/dashboard.e2e.cjs && node e2e/auth.e2e.cjs",
+    "android:sync": "npm run build && cap sync android",
+    "android:debug": "npm run android:sync && cd android && ./gradlew assembleDebug",
+    "android:open": "cap open android"
   },
   "dependencies": {
+    "@aparajita/capacitor-biometric-auth": "^9.1.2",
+    "@capacitor/core": "^7.6.11",
+    "@capacitor/share": "^7.0.4",
     "@heroui/react": "^3.2.8",
     "@heroui/styles": "^3.2.8",
     "@noble/ciphers": "^2.4.0",
     "@noble/hashes": "^2.4.0",
+    "capacitor-secure-storage-plugin": "^0.12.0",
     "hls.js": "^1.7.4",
     "lucide-react": "^1.80.0",
     "react": "^19.3.1",
@@ -23,6 +30,8 @@
     "zustand": "^5.1.0"
   },
   "devDependencies": {
+    "@capacitor/android": "^7.6.11",
+    "@capacitor/cli": "^7.6.11",
     "@tailwindcss/vite": "^4.3.5",
     "@types/node": "^26.6.10",
     "@types/react": "^19.3.1",

@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { biometric } from "../core/native";
 import { secureStore } from "./secure";
 import { useServers } from "./servers";
 
@@ -23,6 +24,7 @@ interface AuthState {
   skipSetup: () => void;
   unlock: (username: string, password: string) => Promise<boolean>;
   lock: () => void;
+  checkPassword: (password: string) => Promise<boolean>;
   disable: (password: string) => Promise<boolean>;
   change: (currentPassword: string, username: string, password: string) => Promise<boolean>;
   /** Forgotten password: deletes the encrypted servers and the account. */
@@ -57,6 +59,8 @@ export const useAuth = create<AuthState>()((set) => ({
     return true;
   },
 
+  checkPassword: (password) => secureStore.checkPassword(password),
+
   lock: () => {
     if (!secureStore.enabled) return;
     secureStore.lock();
@@ -67,18 +71,25 @@ export const useAuth = create<AuthState>()((set) => ({
 
   disable: async (password) => {
     const ok = await secureStore.disable(password);
-    if (ok) set({ status: "off", username: "", failed: false });
+    if (ok) {
+      await biometric.disable(); // the stored password would be stale
+      set({ status: "off", username: "", failed: false });
+    }
     return ok;
   },
 
   change: async (currentPassword, username, password) => {
     const ok = await secureStore.change(currentPassword, username, password);
-    if (ok) set({ username: username.trim() });
+    if (ok) {
+      await biometric.refresh({ username: username.trim(), password });
+      set({ username: username.trim() });
+    }
     return ok;
   },
 
   forgot: () => {
     secureStore.wipe();
+    void biometric.disable();
     emptyServers();
     set({ status: "setup", username: "", failed: false });
   },

@@ -4,6 +4,8 @@ import {
   useOverlayState, type UseOverlayStateReturn,
 } from "@heroui/react";
 import { Lock } from "lucide-react";
+import { useEffect } from "react";
+import { biometric, isNative } from "../../core/native";
 import { fmt, t } from "../../i18n/es";
 import { useAuth } from "../../store/auth";
 import { AUTO_LOCK_MINUTES, usePrefs, type AutoLockMinutes } from "../../store/prefs";
@@ -75,6 +77,87 @@ function DisableDialog({ state }: { state: UseOverlayStateReturn }) {
   );
 }
 
+/** Native only: turns the fingerprint/face unlock on (after confirming the password) or off. */
+function BiometricRow({ username }: { username: string }) {
+  const checkPassword = useAuth((s) => s.checkPassword);
+  const [supported, setSupported] = useState(false);
+  const [enabled, setEnabled] = useState(biometric.enabled());
+  const dialog = useOverlayState();
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    void biometric.supported().then((ok) => alive && setSupported(ok));
+    return () => {
+      alive = false;
+    };
+  }, []);
+  if (!isNative() || !supported) return null;
+
+  const submit = async (event: FormEvent) => {
+    event.preventDefault();
+    setPending(true);
+    try {
+      if (!(await checkPassword(password))) return setError(t.auth.wrongCurrent);
+      if (!(await biometric.enable({ username, password }, t.auth.biometricsReason))) return setError(t.auth.biometricsFailed);
+      setEnabled(true);
+      dialog.close();
+      toast.success(t.auth.biometricsEnabled);
+    } finally {
+      setPending(false);
+    }
+  };
+
+  return (
+    <div className="flex flex-col gap-1">
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-sm font-medium">{t.auth.biometrics}</span>
+        <Button
+          variant={enabled ? "secondary" : "primary"}
+          size="sm"
+          onPress={async () => {
+            if (enabled) {
+              await biometric.disable();
+              setEnabled(false);
+              toast.success(t.auth.biometricsDisabled);
+            } else {
+              setPassword("");
+              setError(null);
+              dialog.open();
+            }
+          }}
+        >
+          {enabled ? t.auth.disable : t.auth.biometricsEnable}
+        </Button>
+      </div>
+      <p className="text-xs text-[var(--muted)]">{t.auth.biometricsHelp}</p>
+      {dialog.isOpen ? (
+        <Dialog
+          state={dialog}
+          title={t.auth.biometricsEnableTitle}
+          footer={
+            <>
+              <Button variant="tertiary" onPress={dialog.close}>{t.auth.cancel}</Button>
+              <Button variant="primary" type="submit" form="biometric-form" isPending={pending}>{t.auth.biometricsEnable}</Button>
+            </>
+          }
+        >
+          <Form id="biometric-form" onSubmit={submit} className="flex flex-col gap-3" validationBehavior="aria">
+            <p className="text-sm text-[var(--muted)]">{t.auth.biometricsEnableBody}</p>
+            <TextField type="password" value={password} onChange={(v) => { setPassword(v); setError(null); }} isInvalid={!!error} autoComplete="current-password" autoFocus>
+              <Label>{t.auth.password}</Label>
+              <Input />
+              <FieldError>{error}</FieldError>
+            </TextField>
+          </Form>
+        </Dialog>
+      ) : null}
+    </div>
+  );
+}
+
 /** Settings card: turn protection on or off, auto-lock, change credentials, lock now. */
 export function SecuritySettings() {
   const status = useAuth((s) => s.status);
@@ -127,6 +210,7 @@ export function SecuritySettings() {
               </Select.Popover>
             </Select>
             <p className="-mt-2 text-xs text-[var(--muted)]">{t.auth.autoLockHelp}</p>
+            <BiometricRow username={username} />
             <div className="flex flex-wrap gap-2">
               <Button variant="secondary" onPress={changeDialog.open}>{t.auth.change}</Button>
               <Button variant="secondary" onPress={lock}>

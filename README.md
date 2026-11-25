@@ -20,8 +20,8 @@ route and field names to older servers).
 | 4a | Host agent (Go): stable services, PID/language mapping, backup inputs | done |
 | 4b | Panel screen "Servicios" (list, editor, manual switch) with demo agent | done |
 | 4c | Agent: `mediamtx.yml` editing with validation, binaries, hardware, network | |
-| 5 | Connections + kick, WHEP/HLS preview | |
-| 6 | Android APK | |
+| 5 | Connections + kick, WHEP/HLS preview | done |
+| 6 | Android APK (Capacitor 7): native HTTP, biometric unlock, share sheet | code done, APK not built yet (see Android) |
 
 ## Develop
 
@@ -120,3 +120,29 @@ A server can have an optional `nodo-agent` (see `agent/README.md`). Set its URL 
 agent's services, shows the output ↔ input PID map, and lets you start/stop, switch input, edit and delete.
 The agent credentials (username and password, or the API token) are secrets: they are encrypted with the vault and only exported when "include passwords" is on.
 The demo server brings a simulated agent, so the whole screen works offline.
+
+## Android
+
+The panel is wrapped with Capacitor 7 (`android/`, `capacitor.config.json`). Inside the app:
+
+- **Native HTTP.** `core/nativeTransport.ts` sends API and agent requests through `CapacitorHttp`, so CORS and the
+  https/http mixed-content rule do not apply to LAN or VPN servers. `fetch` and XHR are *not* patched globally, so the
+  WebRTC/HLS preview behaves as in a browser (MediaMTX allows any origin by default; the WebView allows mixed content).
+- **Cleartext HTTP** is enabled in the manifest because a LAN MediaMTX or agent normally has no certificate.
+- **Biometric unlock.** After confirming the panel password, it is stored in the Android Keystore
+  (`capacitor-secure-storage-plugin`) and released only after the system fingerprint/face prompt
+  (`@aparajita/capacitor-biometric-auth`). The password remains the master secret; changing it refreshes the stored copy,
+  turning protection off or "forgot password" erases it.
+- **Share sheet** for exporting servers (the JSON goes to the share dialog instead of a download).
+
+Build (needs JDK 17+ and the Android SDK with platform 35 and build-tools 35.0.0; accepting its licenses is up to you):
+
+```bash
+npm run android:debug     # builds the panel, syncs it and runs ./gradlew assembleDebug
+# -> android/app/build/outputs/apk/debug/app-debug.apk
+```
+
+`.github/workflows/android.yml` builds the same APK in CI (the setup action accepts the SDK licenses on the runner), and
+`.github/workflows/agent.yml` tests the agent and attaches the release tarballs on tags.
+Not verified on a device or emulator: the native paths are covered by unit tests with fake plugins only.
+`capacitor.config.json` is JSON because the Capacitor CLI cannot load a `.ts` config under TypeScript 7.

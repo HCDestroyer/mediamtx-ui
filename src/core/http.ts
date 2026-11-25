@@ -123,11 +123,19 @@ export function isValidApiUrl(input: string): boolean {
  * The Android build uses native HTTP, so it passes `pageProtocol: "capacitor:"`
  * or overrides the check entirely.
  */
+let nativePlatform = false;
+
+/** The Android app makes requests natively, so the page protocol says nothing about what is blocked. */
+export function setNativePlatform(value: boolean): void {
+  nativePlatform = value;
+}
+
 export function isMixedContentBlocked(
   apiUrl: string,
   pageProtocol: string | undefined = typeof location === "undefined"
     ? undefined
     : location.protocol,
 ): boolean {
+  if (nativePlatform) return false;
   return pageProtocol === "https:" && apiUrl.toLowerCase().startsWith("http://");
 }

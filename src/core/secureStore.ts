@@ -131,6 +131,12 @@ export class SecureStore {
     this.key = null;
   }
 
+  /** Whether the password is the right one, without changing anything. */
+  async checkPassword(password: string): Promise<boolean> {
+    const meta = this.meta;
+    return Boolean(meta && (await (await loadVault()).unlockVault(meta, meta.username, password)));
+  }
+
   /** Turns protection off after checking the password; the protected values go back to clear text. */
   async disable(password: string): Promise<boolean> {
     const meta = this.meta;
