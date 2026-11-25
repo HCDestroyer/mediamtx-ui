@@ -83,6 +83,36 @@ const check = (n, ok, x = '') => log.push(`${ok ? 'PASS' : 'FAIL'} ${n} ${x}`);
   await page.waitForSelector('text=Todavía no hay servicios', { timeout: 10000 });
   check('the panel keeps working with the stored new password', true);
 
+  // HTTP play configured from the panel against the real agent: the TS and Go sides must agree
+  await page.goto(URL + '#/play');
+  const toggle = (name) => page.locator('label', { hasText: name }).first().click();
+  await page.getByRole('button', { name: 'Guardar cambios' }).waitFor();
+  await toggle('Activar la reproducción HTTP');
+  await toggle('Pedir usuario');
+  await page.getByLabel('Nombre del usuario').fill('ana');
+  await page.getByRole('button', { name: 'Agregar usuario' }).click();
+  await page.getByRole('button', { name: 'Agregar pool' }).click();
+  await page.getByLabel('Nombre del pool').fill('lan');
+  await page.getByLabel('Direcciones (una por línea) lan').fill('10.0.0.0/8');
+  await page.getByRole('button', { name: 'Guardar cambios' }).click();
+  await page.waitForSelector('text=Configuración aplicada');
+  const copy = page.getByTestId('user-ana').getByRole('button', { name: /Copiar token/ });
+  await copy.waitFor();
+  check('real agent accepted the play configuration and generated the token', true);
+  const probe = (path, headers) => page.evaluate(async ([p, h]) => { const r = await fetch(p, { headers: h }); return [r.status, (await r.text()).slice(0, 20)]; }, [path, headers || {}]);
+  check('playlist needs the token', (await probe('/play/playlist.m3u'))[0] === 401);
+  const { token } = await page.evaluate(async ([tk]) => { const r = await fetch('/api/v1/play/config', { headers: { Authorization: 'Bearer ' + tk } }); const c = await r.json(); return { token: c.users[0].token }; }, [TOKEN]);
+  const withToken = await probe('/play/playlist.m3u?token=' + token);
+  check('playlist answers with the user token', withToken[0] === 200 && withToken[1].startsWith('#EXTM3U'), JSON.stringify(withToken));
+  // block loopback (where this browser connects from) with a rule, from the UI
+  await page.getByRole('button', { name: 'Agregar regla' }).click();
+  await page.getByLabel('IP o rango 1').fill('127.0.0.0/8');
+  await page.getByRole('combobox', { name: 'Acción 1' }).click().catch(async () => { await page.getByRole('button', { name: 'Acción 1' }).click(); });
+  await page.getByRole('option', { name: 'Bloquear' }).click();
+  await page.getByRole('button', { name: 'Guardar cambios' }).click();
+  await page.waitForSelector('text=Configuración aplicada');
+  check('a blocked address gets 403 even with a valid token', (await probe('/play/playlist.m3u?token=' + token))[0] === 403);
+
   check('no page errors or failed requests', errors.length === 0, errors.join('|'));
   console.log(log.join('\n'));
   await browser.close();

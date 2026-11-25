@@ -234,6 +234,7 @@ function ServiceCard({ view, onToggle, onSwitch, onEdit, onDelete }: ServiceCard
         {running ? (
           <p className="text-xs text-[var(--muted)]">
             {fmt(t.services.uptime, { time: duration(status.uptimeSec) })} · {fmt(t.services.outKbps, { n: Math.round(status.outKbps) })}
+            {status.viewers ? ` · ${fmt(t.services.viewers, { n: status.viewers })}` : ""}
           </p>
         ) : null}
 

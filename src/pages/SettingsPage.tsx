@@ -3,6 +3,7 @@ import { Button, Card, Label, ListBox, Select, Switch, toast, useOverlayState } 
 import { Download, Upload } from "lucide-react";
 import { AgentPasswordOverlay } from "../components/AgentPasswordOverlay";
 import { SecuritySettings } from "../components/auth/SecuritySettings";
+import { downloadText } from "../core/download";
 import { shareText } from "../core/native";
 import { exportServers, parseImport } from "../core/serversIO";
 import { fmt, t } from "../i18n/es";
@@ -18,14 +19,7 @@ const THEMES: Array<{ id: ThemePref; label: string }> = [
 ];
 
 /** Triggers a browser download. The Android build will use the Share sheet instead. */
-function download(filename: string, text: string): void {
-  const url = URL.createObjectURL(new Blob([text], { type: "application/json" }));
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = filename;
-  link.click();
-  URL.revokeObjectURL(url);
-}
+const download = (filename: string, text: string): void => downloadText(filename, text, "application/json");
 
 export default function SettingsPage() {
   const theme = usePrefs((s) => s.theme);
@@ -106,6 +100,21 @@ export default function SettingsPage() {
           </div>
           <a
             href={hrefFor({ name: "config" })}
+            className="rounded-xl bg-[var(--surface-secondary)] px-3 py-2 text-sm font-medium"
+          >
+            {t.settings.open}
+          </a>
+        </Card.Content>
+      </Card>
+
+      <Card>
+        <Card.Content className="flex flex-row items-center gap-3">
+          <div className="min-w-0 flex-1">
+            <p className="font-semibold">{t.settings.play}</p>
+            <p className="text-xs text-[var(--muted)]">{t.settings.playHelp}</p>
+          </div>
+          <a
+            href={hrefFor({ name: "play" })}
             className="rounded-xl bg-[var(--surface-secondary)] px-3 py-2 text-sm font-medium"
           >
             {t.settings.open}

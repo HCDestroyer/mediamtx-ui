@@ -125,6 +125,23 @@ sudo nodo-agent init -mediamtx-conf /etc/mediamtx/mediamtx.yml -mediamtx-bin /us
 - Channels created, edited or deleted from the panel are also written to the additional file (`PUT/PATCH/DELETE /api/v1/mediamtx/paths/<name>`), so they survive a MediaMTX restart. The live change goes first through MediaMTX's own API; a path that only exists in the additional file is dropped on delete, one defined in your file gets a `null` that removes it from the generated file.
 - Not verified against a real MediaMTX binary yet: the tests use a stand-in that implements `--validate-conf`.
 
+## HTTP play (like Astra's "HTTP Play")
+
+Any running service can be watched by its id with no output configured: `http://<agent>:<port>/play/<id>` streams its
+stabilized MPEG-TS (`video/mp2t`), and `/play/playlist.m3u` lists the running, non-hidden services. A service may have
+zero outputs and be seen only this way; `noPlay: true` hides one.
+
+- **Off by default.** While disabled the `/play/` routes do not exist (404).
+- **Access by address.** Ordered `allow`/`deny` rules over single IPs, CIDR ranges and named pools (`hotel: 192.168.10.0/24, 10.1.1.5`),
+  IPv4 and IPv6; the first match wins, and `default` decides when nothing matches (so it can be an allow list or a block list).
+  The address is the TCP peer: `X-Forwarded-For` is not trusted.
+- **Access by user (optional).** `requireAuth` needs a token, sent as `?token=`, `Authorization: Bearer` or as the password of HTTP
+  Basic (players that only know `user:pass@host`). Each user has a random token, which is what goes in their playlist; the password of a panel
+  account never appears in a link. Tokens are stored in `play.json` (mode 0600).
+- **Limits.** `maxViewers` (default 200); a viewer that falls about two seconds behind is disconnected instead of slowing the others.
+- API: `GET/PUT /api/v1/play/config` (422 with the reason when invalid; nothing changes), `GET /api/v1/play/clients`.
+- A viewer that joins mid-stream receives video from the next keyframe on, as with any MPEG-TS over HTTP.
+
 ## Host, network and hardware
 
 `GET /api/v1/host` reports, from `/proc` and `/sys` only (no external tools): CPU and memory, per-interface rates and
@@ -170,6 +187,8 @@ All `/api/v1` routes except `auth/status`, `auth/login` and `auth/setup` need `A
 | `GET /api/v1/binaries` · `/binaries/mediamtx/latest` | versions, tools found / newest release |
 | `POST /api/v1/binaries/mediamtx/install` · `use` · `DELETE /binaries/mediamtx/<tag>` | install, select, remove a version |
 | `GET /api/v1/mediamtx/process` · `POST /mediamtx/process/{start,stop,restart}` | run MediaMTX from the agent |
+| `GET/PUT /api/v1/play/config` · `GET /play/clients` | HTTP play access config / connected viewers |
+| `GET /play/<id>` · `/play/playlist.m3u` | watch a service / M3U playlist (public routes, gated by the play rules) |
 | `GET /api/v1/host` | resources, network, hardware and recommendations |
 | `GET /api/v1/info` | version, FFmpeg found |
 | `GET /api/v1/services` | every service with its status |

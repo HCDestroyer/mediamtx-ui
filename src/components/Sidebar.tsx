@@ -1,4 +1,4 @@
-import { Cpu, FileCog, Package, Radio, Link2, Server, Waypoints, SlidersHorizontal, type LucideIcon } from "lucide-react";
+import { Cpu, PlayCircle, FileCog, Package, Radio, Link2, Server, Waypoints, SlidersHorizontal, type LucideIcon } from "lucide-react";
 import { t } from "../i18n/es";
 import { hrefFor, useRoute, type Route } from "../router";
 import { NavLink } from "./NavLink";
@@ -16,6 +16,7 @@ export const NAV_ITEMS: NavItem[] = [
   { route: "channels", label: t.nav.channels, icon: Radio },
   { route: "connections", label: t.nav.connections, icon: Link2 },
   { route: "services", label: t.nav.services, icon: Waypoints },
+  { route: "play", label: t.nav.play, icon: PlayCircle, mobile: false },
   { route: "system", label: t.nav.system, icon: Cpu, mobile: false },
   { route: "config", label: t.nav.config, icon: FileCog, mobile: false },
   { route: "binaries", label: t.nav.binaries, icon: Package, mobile: false },
@@ -29,7 +30,7 @@ export function isActive(item: NavItem, route: Route): boolean {
 }
 
 const GROUPS: Array<{ title: string; items: NavItem["route"][] }> = [
-  { title: t.nav.groupOperation, items: ["channels", "services", "connections", "system"] },
+  { title: t.nav.groupOperation, items: ["channels", "services", "play", "connections", "system"] },
   { title: t.nav.groupManagement, items: ["config", "binaries", "servers", "settings"] },
 ];
 

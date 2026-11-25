@@ -207,12 +207,12 @@ function EditorBody({ state, service, onSave }: ServiceEditorProps) {
                 <Input autoCapitalize="none" autoCorrect="off" spellCheck={false} placeholder="udp://239.2.2.2:1234#ttl=32" />
                 <FieldError>{message(visible.outputs[i]?.url)}</FieldError>
               </TextField>
-              <Button isIconOnly size="sm" variant="ghost" aria-label={t.services.form.removeRow} onPress={() => removeAt("outputs", i)} isDisabled={form.outputs.length === 1}>
+              <Button isIconOnly size="sm" variant="ghost" aria-label={t.services.form.removeRow} onPress={() => removeAt("outputs", i)} >
                 <Trash2 size={14} aria-hidden />
               </Button>
             </div>
           ))}
-          {visible.general === "outputs-required" ? <p role="alert" className="text-xs text-[var(--danger)]">{message(visible.general)}</p> : null}
+          {form.outputs.length === 0 ? <p className="text-xs text-[var(--muted)]">{t.services.form.noOutputs}</p> : null}
           <div>
             <Button size="sm" variant="tertiary" isDisabled={form.outputs.length >= MAX_OUTPUTS} onPress={() => patch({ outputs: [...form.outputs, { url: "" }] })}>
               <Plus size={14} aria-hidden />
@@ -220,6 +220,15 @@ function EditorBody({ state, service, onSave }: ServiceEditorProps) {
             </Button>
           </div>
         </fieldset>
+
+        <Switch isSelected={form.noPlay} onChange={(noPlay) => patch({ noPlay })} aria-label={t.services.form.noPlay} className="flex-row items-center gap-3">
+          <Switch.Control>
+            <Switch.Thumb />
+          </Switch.Control>
+          <Switch.Content>
+            <span className="text-sm">{t.services.form.noPlay}</span>
+          </Switch.Content>
+        </Switch>
 
         {serverError ? <p role="alert" className="text-sm text-[var(--danger)]">{serverError}</p> : null}
       </Form>

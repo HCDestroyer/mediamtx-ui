@@ -105,7 +105,8 @@ describe("validateServiceForm", () => {
 
   it("requires at least one input, output and stream", () => {
     expect(validateServiceForm(valid({ inputs: [] })).general).toBe("inputs-required");
-    expect(validateServiceForm(valid({ outputs: [] })).general).toBe("outputs-required");
+    // No output is valid: the service is watched through HTTP play.
+    expect(hasErrors(validateServiceForm(valid({ outputs: [] })))).toBe(false);
     expect(validateServiceForm(valid({ streams: [] })).general).toBe("streams-required");
   });
 

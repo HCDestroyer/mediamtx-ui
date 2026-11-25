@@ -1,7 +1,7 @@
 import { encodePathName } from "../mediamtx/api";
 import { getTransport, isMixedContentBlocked, type Transport } from "../http";
 import type {
-  AgentInfo, AgentService, AgentView, BinariesState, HostView, MediaMtxBinaries, MtxConfigState, MtxValidation, ProcessView,
+  AgentInfo, AgentService, AgentView, BinariesState, HostView, MediaMtxBinaries, MtxConfigState, MtxValidation, PlayClient, PlayConfig, ProcessView,
 } from "./types";
 
 export class AgentError extends Error {
@@ -56,6 +56,11 @@ export interface AgentClient {
   /** Validates and applies; rejects with AgentError(422) and the reason when it is invalid. */
   mtxApply(overlay: string): Promise<MtxConfigState>;
   mtxUndo(): Promise<MtxConfigState>;
+  /** HTTP play: who may watch, with which user, from which addresses. */
+  playConfig(): Promise<PlayConfig>;
+  /** Validates and applies; rejects with AgentError(422) and the reason. The agent fills in new users' tokens. */
+  setPlayConfig(config: PlayConfig): Promise<PlayConfig>;
+  playClients(): Promise<PlayClient[]>;
   host(): Promise<HostView>;
   binaries(): Promise<BinariesState>;
   /** Asks the release server for the newest MediaMTX version. */
@@ -165,6 +170,9 @@ export function createAgentClient(options: AgentClientOptions): AgentClient {
     mtxValidate: (overlay) => call<MtxValidation>("POST", "/api/v1/mediamtx/validate", { overlay }),
     mtxApply: (overlay) => call<MtxConfigState>("PUT", "/api/v1/mediamtx/config", { overlay }),
     mtxUndo: () => call<MtxConfigState>("POST", "/api/v1/mediamtx/undo"),
+    playConfig: () => call<PlayConfig>("GET", "/api/v1/play/config"),
+    setPlayConfig: (config) => call<PlayConfig>("PUT", "/api/v1/play/config", config),
+    playClients: () => call<PlayClient[]>("GET", "/api/v1/play/clients"),
     host: () => call<HostView>("GET", "/api/v1/host"),
     binaries: () => call<BinariesState>("GET", "/api/v1/binaries"),
     latestMediaMtx: async () => (await call<{ version: string }>("GET", "/api/v1/binaries/mediamtx/latest")).version,

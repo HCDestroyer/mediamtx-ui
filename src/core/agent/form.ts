@@ -15,6 +15,8 @@ export interface ServiceForm {
   cbrKbps: string;
   streams: Array<{ pid: string; kind: StreamKind; lang: string; fallbackAny: boolean }>;
   outputs: Array<{ url: string }>;
+  /** Hide the service from HTTP play. */
+  noPlay: boolean;
 }
 
 /** The structure the downstream device usually expects: one video and two audio languages. */
@@ -36,7 +38,9 @@ export const EMPTY_SERVICE_FORM: ServiceForm = {
   provider: "",
   cbrKbps: "",
   streams: DEFAULT_STREAMS.map((s) => ({ ...s })),
-  outputs: [{ url: "" }],
+  // No output by default: the service can be watched through HTTP play right away.
+  outputs: [],
+  noPlay: false,
 };
 
 export function serviceToForm(s: AgentService): ServiceForm {
@@ -55,6 +59,7 @@ export function serviceToForm(s: AgentService): ServiceForm {
       pid: String(st.pid), kind: st.kind, lang: st.lang ?? "", fallbackAny: st.fallbackAny === true,
     })),
     outputs: s.outputs.map((o) => ({ url: o.url })),
+    noPlay: s.noPlay === true,
   };
 }
 
@@ -82,6 +87,7 @@ export function formToService(f: ServiceForm): Omit<AgentService, "id"> & { id?:
       streams,
     },
     outputs: f.outputs.map((o) => ({ url: o.url.trim() })),
+    ...(f.noPlay ? { noPlay: true } : {}),
   };
 }
 
@@ -101,8 +107,7 @@ export type ServiceFormErrorCode =
   | "cbr-invalid"
   | "delay-invalid"
   | "streams-required"
-  | "inputs-required"
-  | "outputs-required";
+  | "inputs-required";
 
 export interface ServiceFormErrors {
   name?: ServiceFormErrorCode;
@@ -147,7 +152,6 @@ export function validateServiceForm(f: ServiceForm): ServiceFormErrors {
     errors.inputs[i] = e;
   });
 
-  if (f.outputs.length === 0) errors.general = errors.general ?? "outputs-required";
   f.outputs.forEach((output, i) => {
     const problem = checkAddress(output.url, OUTPUT_SCHEMES, "output");
     errors.outputs[i] = problem ? { url: problem } : {};

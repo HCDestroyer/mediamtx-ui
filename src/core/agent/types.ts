@@ -36,6 +36,8 @@ export interface AgentService {
   backup: { mode: BackupMode; returnDelaySec?: number };
   profile: AgentProfile;
   outputs: Array<{ url: string }>;
+  /** Keeps the service out of HTTP play and its playlist. */
+  noPlay?: boolean;
 }
 
 export interface AgentProgramStream {
@@ -102,6 +104,8 @@ export interface AgentStatus {
   mapping: AgentMapEntry[];
   outputs: AgentOutputStatus[];
   events: AgentEvent[];
+  /** HTTP play viewers watching right now. */
+  viewers?: number;
 }
 
 export interface AgentView {
@@ -231,4 +235,46 @@ export interface HostView {
   dvb: HostDvbAdapter[];
   pciCards: HostPciCard[];
   findings: HostFinding[];
+}
+
+export type PlayAction = "allow" | "deny";
+
+export interface PlayPool {
+  name: string;
+  /** Single addresses or CIDR ranges, IPv4 or IPv6. */
+  entries: string[];
+}
+
+/** Exactly one of `pool` and `address` is set. */
+export interface PlayRule {
+  action: PlayAction;
+  pool?: string;
+  address?: string;
+}
+
+export interface PlayUser {
+  name: string;
+  /** Empty for a new user: the agent generates one. */
+  token: string;
+}
+
+/** Access configuration of HTTP play. Rules are evaluated in order and the first match wins. */
+export interface PlayConfig {
+  enabled: boolean;
+  requireAuth: boolean;
+  default: PlayAction;
+  maxViewers: number;
+  pools: PlayPool[];
+  rules: PlayRule[];
+  users: PlayUser[];
+}
+
+export interface PlayClient {
+  id: number;
+  service: string;
+  ip: string;
+  user?: string;
+  /** Unix seconds. */
+  since: number;
+  bytes: number;
 }

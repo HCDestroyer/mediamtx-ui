@@ -1,6 +1,7 @@
 import type { HttpRequest, HttpResponse, Transport } from "../http";
+import { DEFAULT_PLAY_CONFIG, validatePlayConfig } from "./play";
 import type {
-  BinariesState, HostView, MtxConfigState, ProcessStatus, AgentEvent, AgentInputStatus, AgentMapEntry, AgentProfile, AgentProgram, AgentService, AgentStatus, AgentView,
+  BinariesState, HostView, MtxConfigState, PlayClient, PlayConfig, ProcessStatus, AgentEvent, AgentInputStatus, AgentMapEntry, AgentProfile, AgentProgram, AgentService, AgentStatus, AgentView,
 } from "./types";
 
 /** Agent URL of the demo server; the demo transport answers by path and ignores the host. */
@@ -122,6 +123,21 @@ export function createDemoAgentTransport(now: () => number = Date.now): Transpor
     bins.startedAt = now();
     procLogs.push(`--- started ${bins.current}`, `INF MediaMTX ${bins.current}`);
   };
+  // HTTP play: configuration is kept (and validated like the agent does); viewers come from a fixed list.
+  let play: PlayConfig = structuredClone(DEFAULT_PLAY_CONFIG);
+  const newToken = () => Array.from({ length: 32 }, () => "0123456789abcdef"[Math.floor(Math.random() * 16)]).join("");
+  const playClients = (): PlayClient[] => {
+    if (!play.enabled) return [];
+    const since = Math.floor((now() - 25 * 60_000) / 1000);
+    const viewers: PlayClient[] = [
+      { id: 1, service: "deportes-hd", ip: "192.168.1.50", user: play.users[0]?.name, since, bytes: Math.floor((now() - since * 1000) * 700) },
+      { id: 2, service: "deportes-hd", ip: "203.0.113.77", since: since + 600, bytes: Math.floor((now() - since * 1000 - 600_000) * 700) },
+    ];
+    // The agent refuses blocked addresses; the demo hides them the same way for single-address rules.
+    const blocked = new Set(play.rules.filter((r) => r.action === "deny" && r.address).map((r) => r.address));
+    return viewers.filter((v) => !blocked.has(v.ip));
+  };
+
   /** A machine that has a few things worth advising on, so the demo shows each kind of recommendation. */
   const hostView = (): HostView => {
     const t = now() / 1000;
@@ -195,6 +211,15 @@ export function createDemoAgentTransport(now: () => number = Date.now): Transpor
     if (request.headers?.Authorization !== `Bearer ${DEMO_AGENT_TOKEN}`) return fail(401, "missing or wrong token");
 
     if (path === "/api/v1/info") return ok({ version: "0.1.0-demo", ffmpeg: "ffmpeg version 6.1.1", mediamtx: true, startedAt: Math.floor(now() / 1000) });
+    if (path === "/api/v1/play/config" && method === "GET") return ok(play);
+    if (path === "/api/v1/play/config" && method === "PUT") {
+      const next = request.body as PlayConfig;
+      const problem = validatePlayConfig(next)[0];
+      if (problem) return fail(422, `invalid configuration (${problem.code})`);
+      play = { ...next, users: next.users.map((u) => ({ ...u, token: u.token || newToken() })) };
+      return ok(play);
+    }
+    if (path === "/api/v1/play/clients" && method === "GET") return ok(playClients());
     if (path === "/api/v1/host" && method === "GET") return ok(hostView());
     if (path === "/api/v1/binaries" && method === "GET") return ok(binState());
     if (path === "/api/v1/binaries/mediamtx/latest") return ok({ version: newest() });
