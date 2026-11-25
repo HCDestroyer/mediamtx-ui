@@ -11,7 +11,7 @@ import { useServers } from "../store/servers";
 export default function ServersPage() {
   const servers = useServers((s) => s.servers);
   const activeId = useServers((s) => s.activeServerId);
-  const { addServer, updateServer, removeServer, setActiveServer } = useServers.getState();
+  const { addServer, updateServer, removeServer, setActiveServer, addDemoServer } = useServers.getState();
 
   const form = useOverlayState();
   const confirm = useOverlayState();
@@ -38,10 +38,17 @@ export default function ServersPage() {
           <h1 className="text-2xl font-bold tracking-tight">{t.servers.title}</h1>
           <p className="mt-1 text-sm text-[var(--muted)]">{t.servers.subtitle}</p>
         </div>
-        <Button variant="primary" onPress={openAdd} className="max-lg:hidden">
-          <Plus size={16} aria-hidden />
-          {t.servers.add}
-        </Button>
+        <div className="flex gap-2 max-lg:hidden">
+          {servers.some((s) => s.demo) ? null : (
+            <Button variant="secondary" onPress={() => addDemoServer()}>
+              {t.servers.addDemo}
+            </Button>
+          )}
+          <Button variant="primary" onPress={openAdd}>
+            <Plus size={16} aria-hidden />
+            {t.servers.add}
+          </Button>
+        </div>
       </div>
 
       {servers.length === 0 ? (
@@ -137,6 +144,11 @@ function ServerCard({ server, isActive, onUse, onEdit, onDelete }: ServerCardPro
       <Card.Header className="flex flex-row items-center gap-2">
         <span className="size-3.5 shrink-0 rounded-full" style={{ background: server.color }} aria-hidden />
         <Card.Title className="min-w-0 flex-1 truncate">{server.name}</Card.Title>
+        {server.demo ? (
+          <Chip size="sm" color="accent" variant="soft">
+            {t.servers.demo}
+          </Chip>
+        ) : null}
         {isActive ? (
           <Chip size="sm" color="success" variant="soft">
             {t.servers.active}
@@ -144,21 +156,29 @@ function ServerCard({ server, isActive, onUse, onEdit, onDelete }: ServerCardPro
         ) : null}
       </Card.Header>
       <Card.Content className="flex flex-col gap-4">
-        <EndpointProbeList endpoints={server.endpoints} results={results} activeType={activeType} />
+        {server.demo ? (
+          <p className="text-sm text-[var(--muted)]">{t.servers.demoNote}</p>
+        ) : (
+          <EndpointProbeList endpoints={server.endpoints} results={results} activeType={activeType} />
+        )}
         <div className="flex flex-wrap items-center gap-2">
-          <Button size="sm" variant="secondary" isPending={testing} onPress={() => void test(server)}>
-            {testing ? t.servers.testing : t.servers.test}
-          </Button>
+          {server.demo ? null : (
+            <Button size="sm" variant="secondary" isPending={testing} onPress={() => void test(server)}>
+              {testing ? t.servers.testing : t.servers.test}
+            </Button>
+          )}
           {!isActive ? (
             <Button size="sm" variant="tertiary" onPress={onUse}>
               {t.servers.use}
             </Button>
           ) : null}
           <div className="ml-auto flex items-center gap-1">
-            <Button size="sm" variant="ghost" onPress={onEdit}>
-              <Pencil size={14} aria-hidden />
-              {t.servers.edit}
-            </Button>
+            {server.demo ? null : (
+              <Button size="sm" variant="ghost" onPress={onEdit}>
+                <Pencil size={14} aria-hidden />
+                {t.servers.edit}
+              </Button>
+            )}
             <Button size="sm" variant="danger-soft" isIconOnly aria-label={t.servers.delete} onPress={onDelete}>
               <Trash2 size={14} aria-hidden />
             </Button>

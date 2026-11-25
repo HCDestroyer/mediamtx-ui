@@ -6,6 +6,7 @@ import {
   resolveEndpoint,
   type ProbeResult,
 } from "../core/resolver";
+import { transportFor } from "../core/transport";
 import type { Server } from "../core/types";
 
 export type ConnectionStatus =
@@ -37,6 +38,8 @@ interface ConnectionState {
   connect: (server: Server) => Promise<void>;
   disconnect: (serverId: string) => void;
   test: (server: Server) => Promise<ProbeResult[]>;
+  /** Feeds request outcomes from other parts of the app into the failure counter. */
+  reportRequest: (server: Server, ok: boolean) => void;
 }
 
 interface Runtime {
@@ -81,7 +84,7 @@ export const useConnection = create<ConnectionState>()((set, get) => {
     const previous = get().byServer[server.id];
     patch(server.id, { status: previous?.active ? previous.status : "resolving" });
 
-    const { active, probes } = await resolveEndpoint(server);
+    const { active, probes } = await resolveEndpoint(server, { transport: transportFor(server) });
     if (generation !== runtime.generation) return;
 
     patch(server.id, {
@@ -94,7 +97,7 @@ export const useConnection = create<ConnectionState>()((set, get) => {
     runtime.timer = setInterval(async () => {
       const current = get().byServer[server.id]?.active;
       if (!current) return void connect(server);
-      const result = await probeEndpoint(server, current.endpoint);
+      const result = await probeEndpoint(server, current.endpoint, { transport: transportFor(server) });
       if (generation !== runtime.generation) return;
       const mustResolve = runtime.failures.record(result.reachable);
       if (mustResolve) return void connect(server);
@@ -119,12 +122,16 @@ export const useConnection = create<ConnectionState>()((set, get) => {
     },
     test: async (server) => {
       set((state) => ({ testing: { ...state.testing, [server.id]: true } }));
-      const results = await probeAll(server);
+      const results = await probeAll(server, { transport: transportFor(server) });
       set((state) => ({
         tests: { ...state.tests, [server.id]: results },
         testing: { ...state.testing, [server.id]: false },
       }));
       return results;
+    },
+    reportRequest: (server, ok) => {
+      const runtime = runtimeFor(server.id);
+      if (runtime.failures.record(ok)) void connect(server);
     },
   };
 });

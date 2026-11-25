@@ -17,6 +17,8 @@ export interface Server {
   endpoints: Endpoint[];
   username: string;
   password: string;
+  /** Demo servers use simulated data and never touch the network. */
+  demo?: boolean;
 }
 
 export type ServerDraft = Omit<Server, "id">;

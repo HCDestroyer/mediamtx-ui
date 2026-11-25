@@ -3,7 +3,8 @@ import { Spinner, ToastProvider } from "@heroui/react";
 import { AppShell } from "./components/AppShell";
 import { useConnectionManager } from "./hooks/useActiveConnection";
 import { useRoute } from "./router";
-import ChannelsPage from "./pages/ChannelsPage";
+const ChannelsPage = lazy(() => import("./pages/ChannelsPage"));
+const ChannelDetailPage = lazy(() => import("./pages/ChannelDetailPage"));
 
 // Secondary screens are split out to keep the initial bundle small.
 const ServersPage = lazy(() => import("./pages/ServersPage"));
@@ -15,8 +16,9 @@ function Page() {
   const route = useRoute();
   switch (route.name) {
     case "channels":
-    case "channel":
       return <ChannelsPage />;
+    case "channel":
+      return <ChannelDetailPage name={route.channel} />;
     case "connections":
       return <ConnectionsPage />;
     case "servers":

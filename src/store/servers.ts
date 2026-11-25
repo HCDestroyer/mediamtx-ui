@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { normalizeApiUrl } from "../core/http";
+import { DEMO_API_URL } from "../core/demo";
 import { newId } from "../core/serversIO";
 import type { Server, ServerDraft } from "../core/types";
 
@@ -12,6 +13,8 @@ interface ServersState {
   removeServer: (id: string) => void;
   setActiveServer: (id: string) => void;
   addServers: (servers: Server[]) => void;
+  /** Adds (or selects) the demo server that runs on simulated data. */
+  addDemoServer: () => void;
 }
 
 function clean(draft: ServerDraft): ServerDraft {
@@ -53,6 +56,15 @@ export const useServers = create<ServersState>()(
         }),
       setActiveServer: (id) => {
         if (get().servers.some((s) => s.id === id)) set({ activeServerId: id });
+      },
+      addDemoServer: () => {
+        const existing = get().servers.find((s) => s.demo);
+        if (existing) return set({ activeServerId: existing.id });
+        const server: Server = {
+          id: newId(), name: "Servidor demo", color: "#8a5cf6", username: "", password: "", demo: true,
+          endpoints: [{ type: "lan", apiUrl: DEMO_API_URL }],
+        };
+        set((state) => ({ servers: [...state.servers, server], activeServerId: server.id }));
       },
       addServers: (incoming) =>
         set((state) => ({
