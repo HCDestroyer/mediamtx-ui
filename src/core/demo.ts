@@ -93,10 +93,15 @@ export function createDemoTransport(now: () => number = Date.now): Transport {
   const fullConf = (name: string): RawPathConf => ({ ...DEFAULTS, ...confs[name], name });
 
   /** Streams that are live right now, by path name. */
+  /** Connections the operator kicked out; they do not come back. */
+  const kicked = new Set<string>();
+
   const liveStreams = (): Stream[] => {
     const live = new Map<string, Stream>();
     for (const stream of STREAMS) {
-      if (stream.dynamic || confs[stream.name]) live.set(stream.name, stream);
+      // A kicked publisher takes its dynamic channel down; a kicked reader just leaves.
+      if (stream.dynamic && kicked.has(stream.source.id)) continue;
+      if (stream.dynamic || confs[stream.name]) live.set(stream.name, { ...stream, readers: stream.readers.filter((r) => !kicked.has(r.id)) });
     }
     // A path that pulls from a URL is live.
     for (const [name, conf] of Object.entries(confs)) {
@@ -148,6 +153,38 @@ export function createDemoTransport(now: () => number = Date.now): Transport {
     }));
   };
 
+  /** Client connections, derived from who publishes and reads each live stream. */
+  const PROTO_OF: Record<string, string> = {
+    rtspSession: "rtsp", rtspsSession: "rtsps", rtmpConn: "rtmp", rtmpsConn: "rtmps",
+    srtConn: "srt", webRTCSession: "webrtc", hlsSession: "hls",
+  };
+  const connections = (): Array<{ proto: string; raw: Record<string, unknown> }> => {
+    const at = now();
+    const out: Array<{ proto: string; raw: Record<string, unknown> }> = [];
+    for (const stream of liveStreams()) {
+      const add = (ref: { type: string; id: string }, publisher: boolean) => {
+        const proto = PROTO_OF[ref.type];
+        if (!proto) return; // pulled sources (srtSource, ...) are not client connections
+        const seed = [...ref.id].reduce((sum, ch) => sum + ch.charCodeAt(0), 0);
+        const bytes = bytesAt(stream, "in", at);
+        out.push({
+          proto,
+          raw: {
+            id: ref.id, created: new Date(STARTED + 600_000 * ((seed % 9) + 1)).toISOString(),
+            remoteAddr: `192.168.1.${10 + (seed % 200)}:${40_000 + ((seed * 7) % 20_000)}`,
+            path: stream.name, query: "", user: "",
+            inboundBytes: publisher ? bytes : 1_000, outboundBytes: publisher ? 0 : bytes,
+            ...(proto === "srt" ? { msRTT: 8 + (seed % 20), packetsReceived: 1_000_000, packetsReceivedLoss: seed % 40 } : {}),
+            ...(proto === "rtsp" ? { transport: seed % 2 ? "tcp" : "udp" } : {}),
+          },
+        });
+      };
+      add(stream.source, true);
+      for (const reader of stream.readers) add(reader, false);
+    }
+    return out;
+  };
+
   const page = <T>(items: T[]) => ({ itemCount: items.length, pageCount: 1, items });
   const ok = (data: unknown = null): HttpResponse => ({ status: 200, ok: true, data });
   const fail = (status: number, error: string): HttpResponse => ({ status, ok: false, data: { error } });
@@ -176,7 +213,18 @@ export function createDemoTransport(now: () => number = Date.now): Transport {
       return ok();
     }
 
+    const kick = /^\/v3\/(rtsp|rtsps|rtmp|rtmps|srt|webrtc|hls)\/(?:sessions|conns)\/kick\/(.+)$/.exec(url.pathname);
+    if (kick && method === "POST") {
+      const id = decodeURIComponent(kick[2]!);
+      if (!connections().some((c) => c.proto === kick[1] && c.raw.id === id)) return fail(404, "connection not found");
+      kicked.add(id);
+      return ok();
+    }
+
     if (method !== "GET") return fail(404, "not found");
+
+    const list = /^\/v3\/(rtsp|rtsps|rtmp|rtmps|srt|webrtc|hls)\/(?:sessions|conns)\/list$/.exec(url.pathname);
+    if (list) return ok(page(connections().filter((c) => c.proto === list[1]).map((c) => c.raw)));
 
     switch (url.pathname) {
       case "/v3/info":
