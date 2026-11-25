@@ -133,7 +133,7 @@ The agent can install MediaMTX itself and, optionally, run it (needs `-mediamtx-
   `mediamtx_<tag>_linux_<amd64|arm64|armv7>.tar.gz`, checks its SHA-256 against the release's `checksums.sha256`,
   extracts only the `mediamtx` binary, and runs `mediamtx --version` to make sure it works here and is the version asked for.
   Nothing is installed if any step fails. The checksum list comes from the same release, so it detects corruption and
-  partial downloads but trusts GitHub; use your own mirror (not configurable yet) if that is not enough.
+  partial downloads but trusts the server; `-mediamtx-release-url` points the agent at your own mirror (same layout as the GitHub project: `/releases/latest`, `/releases/download/<tag>/...`) if that is not enough or the host is offline.
 - **Versions side by side** in `<data>/bin/mediamtx/versions/<tag>/`, selected through an atomically replaced `current` link.
   Switching back is one call; the version in use cannot be deleted.
 - **Run it.** `POST /api/v1/mediamtx/process/{start|stop|restart}` runs `current/mediamtx <data>/mediamtx/mediamtx.yml`

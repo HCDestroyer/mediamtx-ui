@@ -135,7 +135,7 @@ export type MtxValidation = { ok: true; merged: string } | { ok: false; error: s
 
 /** MediaMTX running as a child of the agent. */
 export interface ProcessStatus {
-  state: "stopped" | "running" | "crashed";
+  state: "stopped" | "starting" | "running" | "crashed";
   /** The operator wants it running (it comes back after an agent restart). */
   enabled: boolean;
   pid?: number;

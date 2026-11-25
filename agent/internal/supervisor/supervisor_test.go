@@ -54,6 +54,9 @@ func TestStartRunsTheBinaryWithItsArgumentsAndKeepsItsOutput(t *testing.T) {
 	if err := s.Start(); err != nil {
 		t.Fatal(err)
 	}
+	if st := s.Status().State; st != Starting && st != Running {
+		t.Fatalf("right after Start the state is %q, not starting or running", st)
+	}
 	eventually(t, "running", func() bool { return s.Status().State == Running && s.Status().PID > 0 })
 	eventually(t, "output", func() bool { return strings.Contains(strings.Join(s.Logs(0), "\n"), "args: conf.yml") })
 	if logs := strings.Join(s.Logs(0), "\n"); !strings.Contains(logs, "second") {
@@ -156,6 +159,12 @@ func TestSavedWishToRunSurvivesAnAgentRestartButStopForgetsIt(t *testing.T) {
 	third.Restore()
 	if third.Status().Enabled {
 		t.Fatal("a stopped MediaMTX came back")
+	}
+}
+
+func TestEmptyLogIsAnEmptyListNotNull(t *testing.T) {
+	if got := newRing(5).last(10); got == nil || len(got) != 0 {
+		t.Fatalf("%#v", got)
 	}
 }
 

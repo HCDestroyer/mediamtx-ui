@@ -306,8 +306,8 @@ function ProcessCard({
     <Card data-testid="process-card">
       <Card.Header className="flex flex-row items-center gap-2">
         <Card.Title className="flex-1">{t.binaries.process}</Card.Title>
-        <Chip size="sm" variant="soft" color={live.state === "running" ? "success" : live.state === "crashed" ? "danger" : "default"}>
-          {live.state === "running" ? t.binaries.running : live.state === "crashed" ? t.binaries.crashed : t.binaries.stopped}
+        <Chip size="sm" variant="soft" color={live.state === "running" ? "success" : live.state === "crashed" ? "danger" : live.state === "starting" ? "warning" : "default"}>
+          {live.state === "running" ? t.binaries.running : live.state === "starting" ? t.binaries.starting : live.state === "crashed" ? t.binaries.crashed : t.binaries.stopped}
         </Chip>
       </Card.Header>
       <Card.Content className="flex flex-col gap-4">

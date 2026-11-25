@@ -448,6 +448,7 @@ export const es = {
     processHelp: "Nodo puede ejecutar MediaMTX con el archivo de configuración generado. Si ya lo ejecutas con tu propio servicio, no lo inicies aquí.",
     processNeedsConfig: "Para ejecutarlo desde Nodo, inicia el agente con -mediamtx-conf.",
     running: "En marcha",
+    starting: "Iniciando…",
     stopped: "Detenido",
     crashed: "Se cayó, reintentando",
     start: "Iniciar con Nodo",

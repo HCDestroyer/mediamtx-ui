@@ -49,17 +49,18 @@ func main() {
 		return
 	}
 	var (
-		listen   = flag.String("listen", "127.0.0.1:9980", "address of the web panel and API; bind to a LAN or VPN address only behind a firewall")
-		dataDir  = flag.String("data", "./data", "directory for services.json and the token")
-		ffmpeg   = flag.String("ffmpeg", "ffmpeg", "FFmpeg binary used as protocol adapter")
-		rtsp     = flag.String("mediamtx-rtsp", "", "RTSP base URL of the local MediaMTX, e.g. rtsp://127.0.0.1:8554 (enables mediamtx:// addresses)")
-		mtxUser  = flag.String("mediamtx-user", "", "MediaMTX user with publish and read permissions")
-		origins  = flag.String("allow-origin", "*", "comma-separated origins allowed by CORS")
-		certFile = flag.String("tls-cert", "", "TLS certificate for the API (with -tls-key)")
-		keyFile  = flag.String("tls-key", "", "TLS key for the API")
-		mtxConf  = flag.String("mediamtx-conf", "", "path of your mediamtx.yml (read only); enables the additional configuration file")
-		mtxBin   = flag.String("mediamtx-bin", "", "mediamtx binary used to validate configurations before applying them (--validate-conf)")
-		showVer  = flag.Bool("version", false, "print the version and exit")
+		listen    = flag.String("listen", "127.0.0.1:9980", "address of the web panel and API; bind to a LAN or VPN address only behind a firewall")
+		dataDir   = flag.String("data", "./data", "directory for services.json and the token")
+		ffmpeg    = flag.String("ffmpeg", "ffmpeg", "FFmpeg binary used as protocol adapter")
+		rtsp      = flag.String("mediamtx-rtsp", "", "RTSP base URL of the local MediaMTX, e.g. rtsp://127.0.0.1:8554 (enables mediamtx:// addresses)")
+		mtxUser   = flag.String("mediamtx-user", "", "MediaMTX user with publish and read permissions")
+		origins   = flag.String("allow-origin", "*", "comma-separated origins allowed by CORS")
+		certFile  = flag.String("tls-cert", "", "TLS certificate for the API (with -tls-key)")
+		keyFile   = flag.String("tls-key", "", "TLS key for the API")
+		mtxConf   = flag.String("mediamtx-conf", "", "path of your mediamtx.yml (read only); enables the additional configuration file")
+		mtxBin    = flag.String("mediamtx-bin", "", "mediamtx binary used to validate configurations before applying them (--validate-conf)")
+		mtxMirror = flag.String("mediamtx-release-url", "", "base URL that serves MediaMTX releases (default: the official GitHub project); for a mirror or an offline network")
+		showVer   = flag.Bool("version", false, "print the version and exit")
 	)
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage:\n  nodo-agent [flags]            run the agent\n  nodo-agent init [port] [name] register it as a systemd service (see init -h)\n  nodo-agent passwd <user>      create a panel account or reset its password\n\nFlags:\n")
@@ -72,7 +73,7 @@ func main() {
 	}
 
 	log := slog.New(slog.NewTextHandler(os.Stderr, nil))
-	if err := run(log, runOptions{listen: *listen, dataDir: *dataDir, ffmpeg: *ffmpeg, rtsp: *rtsp, mtxUser: *mtxUser, origins: *origins, certFile: *certFile, keyFile: *keyFile, mtxConf: *mtxConf, mtxBin: *mtxBin}); err != nil {
+	if err := run(log, runOptions{listen: *listen, dataDir: *dataDir, ffmpeg: *ffmpeg, rtsp: *rtsp, mtxUser: *mtxUser, origins: *origins, certFile: *certFile, keyFile: *keyFile, mtxConf: *mtxConf, mtxBin: *mtxBin, mtxMirror: *mtxMirror}); err != nil {
 		log.Error("agent stopped", "error", err)
 		os.Exit(1)
 	}
@@ -80,7 +81,7 @@ func main() {
 
 type runOptions struct {
 	listen, dataDir, ffmpeg, rtsp, mtxUser, origins, certFile, keyFile string
-	mtxConf, mtxBin                                                    string
+	mtxConf, mtxBin, mtxMirror                                         string
 }
 
 func run(log *slog.Logger, o runOptions) error {
@@ -124,7 +125,7 @@ func run(log *slog.Logger, o runOptions) error {
 	}
 
 	// MediaMTX versions and, when there is a generated configuration, an optional supervised process.
-	bins := binaries.New(filepath.Join(dataDir, "bin", "mediamtx"), binaries.Options{})
+	bins := binaries.New(filepath.Join(dataDir, "bin", "mediamtx"), binaries.Options{BaseURL: o.mtxMirror})
 	var sup *supervisor.Supervisor
 	supCtx, stopSup := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stopSup()

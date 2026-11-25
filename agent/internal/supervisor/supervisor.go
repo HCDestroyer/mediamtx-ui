@@ -25,7 +25,9 @@ type State string
 
 const (
 	Stopped State = "stopped"
-	Running State = "running"
+	// Starting covers the moment between asking for a start and the process existing.
+	Starting State = "starting"
+	Running  State = "running"
 	// Crashed means it exited by itself and a restart is pending.
 	Crashed State = "crashed"
 )
@@ -143,6 +145,7 @@ func (s *Supervisor) start(save bool) error {
 		return ErrNoBinary
 	}
 	s.enabled = true
+	s.state = Starting
 	s.intentional = false
 	if save {
 		s.persist(true)
@@ -371,5 +374,5 @@ func (r *ring) last(n int) []string {
 	if n <= 0 || n > len(r.lines) {
 		n = len(r.lines)
 	}
-	return append([]string(nil), r.lines[len(r.lines)-n:]...)
+	return append([]string{}, r.lines[len(r.lines)-n:]...) // never nil: the API sends [] not null
 }
