@@ -41,6 +41,8 @@ type Service struct {
 	Backup  Backup             `json:"backup"`
 	Profile stabilizer.Profile `json:"profile"`
 	Outputs []Output           `json:"outputs"`
+	// NoPlay keeps the service out of HTTP play (/play/<id>), which is otherwise open to every service.
+	NoPlay bool `json:"noPlay,omitempty"`
 }
 
 const (
@@ -93,8 +95,9 @@ func (s Service) Validate(cfg media.Config) error {
 	if len(s.Inputs) == 0 || len(s.Inputs) > maxInputs {
 		return fmt.Errorf("a service needs between 1 and %d inputs", maxInputs)
 	}
-	if len(s.Outputs) == 0 || len(s.Outputs) > maxOutputs {
-		return fmt.Errorf("a service needs between 1 and %d outputs", maxOutputs)
+	// Zero outputs is valid: the service can be watched through HTTP play only.
+	if len(s.Outputs) > maxOutputs {
+		return fmt.Errorf("a service can have at most %d outputs", maxOutputs)
 	}
 	for i, in := range s.Inputs {
 		a, err := addr.Parse(in.URL)

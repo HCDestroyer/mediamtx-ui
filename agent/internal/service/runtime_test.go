@@ -339,10 +339,14 @@ func TestValidation(t *testing.T) {
 		t.Fatalf("reference service: %v", err)
 	}
 	mutate := map[string]func(s *Service){
-		"id":            func(s *Service) { s.ID = "Bad Id" },
-		"name":          func(s *Service) { s.Name = "" },
-		"no inputs":     func(s *Service) { s.Inputs = nil },
-		"no outputs":    func(s *Service) { s.Outputs = nil },
+		"id":        func(s *Service) { s.ID = "Bad Id" },
+		"name":      func(s *Service) { s.Name = "" },
+		"no inputs": func(s *Service) { s.Inputs = nil },
+		"too many outputs": func(s *Service) {
+			for len(s.Outputs) <= maxOutputs {
+				s.Outputs = append(s.Outputs, Output{URL: "udp://127.0.0.1:9"})
+			}
+		},
 		"bad input":     func(s *Service) { s.Inputs[0].URL = "nonsense" },
 		"input scheme":  func(s *Service) { s.Inputs[0].URL = "gopher://x" },
 		"bad pnr":       func(s *Service) { s.Inputs[0].URL = "udp://127.0.0.1:1#pnr=abc" },
@@ -361,6 +365,13 @@ func TestValidation(t *testing.T) {
 		if err := s.Validate(media.Config{}); err == nil {
 			t.Errorf("%s: expected an error", name)
 		}
+	}
+	// A service with no outputs is valid: it can be watched through HTTP play only.
+	none := ok
+	none.Inputs = append([]Input(nil), ok.Inputs...)
+	none.Outputs = nil
+	if err := none.Validate(media.Config{}); err != nil {
+		t.Fatalf("no outputs must be valid: %v", err)
 	}
 	// mediamtx:// is fine once the agent knows where MediaMTX is.
 	s := ok
@@ -382,4 +393,53 @@ func TestRedactURL(t *testing.T) {
 			t.Errorf("redactURL(%q) = %q, want %q", in, got, want)
 		}
 	}
+}
+
+func TestHubFansOutAndNeverBlocks(t *testing.T) {
+	h := newHub()
+	a, _ := h.Subscribe()
+	b, _ := h.Subscribe()
+	h.Publish([]byte("x"))
+	if string(<-a.Data) != "x" || string(<-b.Data) != "x" {
+		t.Fatal("every viewer must get the data")
+	}
+	if h.Viewers() != 2 {
+		t.Fatalf("viewers %d", h.Viewers())
+	}
+	// A viewer that never reads is cut after its queue fills; the other one keeps working.
+	for i := 0; i < subscriberQueue+5; i++ {
+		h.Publish([]byte("y"))
+		select {
+		case <-b.Data:
+		default:
+		}
+	}
+	if h.Viewers() != 1 || !a.Lagged() {
+		t.Fatalf("slow viewer must be dropped: viewers=%d lagged=%v", h.Viewers(), a.Lagged())
+	}
+	if b.Lagged() {
+		t.Fatal("a healthy viewer was cut")
+	}
+	a.Close() // closing a dropped viewer is harmless
+	b.Close()
+	b.Close()
+	if h.Viewers() != 0 {
+		t.Fatal("viewers left")
+	}
+}
+
+func TestHubShutdownEndsViewersAndRefusesNewOnes(t *testing.T) {
+	h := newHub()
+	s, _ := h.Subscribe()
+	h.Shutdown()
+	if _, open := <-s.Data; open {
+		t.Fatal("channel must be closed")
+	}
+	if s.Lagged() {
+		t.Fatal("a stopped service is not a lagging viewer")
+	}
+	if _, ok := h.Subscribe(); ok {
+		t.Fatal("subscribing to a stopped hub must fail")
+	}
+	h.Publish([]byte("z")) // must not panic
 }

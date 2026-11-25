@@ -254,3 +254,49 @@ func (m *Manager) persistLocked(id string, svc *Service) error {
 	sort.Slice(list, func(i, j int) bool { return list[i].ID < list[j].ID })
 	return m.store.Save(list)
 }
+
+// Subscribe attaches an HTTP viewer to a running service.
+func (m *Manager) Subscribe(id string) (*Subscription, error) {
+	m.mu.Lock()
+	it, ok := m.items[id]
+	var rt *Runtime
+	if ok {
+		rt = it.rt
+	}
+	m.mu.Unlock()
+	switch {
+	case !ok:
+		return nil, ErrNotFound
+	case rt == nil:
+		return nil, ErrNotRunning
+	}
+	sub, ok := rt.hub.Subscribe()
+	if !ok {
+		return nil, ErrNotRunning
+	}
+	return sub, nil
+}
+
+// ErrNotRunning is returned when a viewer asks for a service that is stopped.
+var ErrNotRunning = fmt.Errorf("the service is not running")
+
+// PlayEntry is a service as HTTP play and its playlist see it.
+type PlayEntry struct {
+	ID      string `json:"id"`
+	Name    string `json:"name"`
+	Running bool   `json:"running"`
+	// Hidden services are excluded from play and from playlists.
+	Hidden bool `json:"hidden"`
+}
+
+// PlayEntries lists the services, ordered by name.
+func (m *Manager) PlayEntries() []PlayEntry {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	out := make([]PlayEntry, 0, len(m.items))
+	for _, it := range m.items {
+		out = append(out, PlayEntry{ID: it.svc.ID, Name: it.svc.Name, Running: it.rt != nil, Hidden: it.svc.NoPlay})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	return out
+}

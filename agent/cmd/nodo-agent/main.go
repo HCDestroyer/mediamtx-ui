@@ -26,6 +26,7 @@ import (
 	"nodo/agent/internal/host"
 	"nodo/agent/internal/media"
 	"nodo/agent/internal/mtxconf"
+	"nodo/agent/internal/play"
 	"nodo/agent/internal/service"
 	"nodo/agent/internal/store"
 	"nodo/agent/internal/supervisor"
@@ -143,6 +144,11 @@ func run(log *slog.Logger, o runOptions) error {
 		defer sup.Close()
 	}
 
+	playStore, err := play.OpenStore(dataDir)
+	if err != nil {
+		return err
+	}
+
 	// Host monitor: tool detection spawns processes, so it is cached; encoders are listed once, in the background.
 	var (
 		toolMu    sync.Mutex
@@ -180,6 +186,7 @@ func run(log *slog.Logger, o runOptions) error {
 	defer stop()
 
 	mgr := service.NewManager(ctx, cfg, log, st)
+	playHandler := play.NewHandler(playStore, mgr)
 	saved, err := st.Load()
 	if err != nil {
 		return err
@@ -193,7 +200,7 @@ func run(log *slog.Logger, o runOptions) error {
 	}
 	srv := &http.Server{
 		Addr:              listen,
-		Handler:           api.New(api.Config{Token: token, AllowOrigins: splitList(origins), Info: info, Panel: web.Handler(), Accounts: accounts, MediaMTX: mtx, Binaries: bins, Supervisor: sup, FFmpeg: ffmpeg, Host: monitor}, mgr),
+		Handler:           api.New(api.Config{Token: token, AllowOrigins: splitList(origins), Info: info, Panel: web.Handler(), Accounts: accounts, MediaMTX: mtx, Binaries: bins, Supervisor: sup, FFmpeg: ffmpeg, Host: monitor, Play: playHandler, PlayStore: playStore}, mgr),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 	errc := make(chan error, 1)

@@ -12,6 +12,7 @@ import (
 
 	"nodo/agent/internal/media"
 	"nodo/agent/internal/mtxconf"
+	"nodo/agent/internal/play"
 	"nodo/agent/internal/service"
 )
 
@@ -129,5 +130,49 @@ func TestHostViewNeedsAuthAndIsOptional(t *testing.T) {
 	}
 	if resp, _ := do(t, srv, "GET", "/api/v1/host", "Bearer "+token, ""); resp.StatusCode != 404 {
 		t.Fatalf("disabled: %d", resp.StatusCode)
+	}
+}
+
+func TestPlayConfigAndClientsOverTheAPI(t *testing.T) {
+	store, err := play.OpenStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	mgr := service.NewManager(ctx, media.Config{}, slog.New(slog.NewTextHandler(io.Discard, nil)), nopStore{})
+	srv := httptest.NewServer(New(Config{Token: token, Info: Info{Version: "test"}, Play: play.NewHandler(store, mgr), PlayStore: store}, mgr))
+	t.Cleanup(func() { srv.Close(); mgr.StopAll(); cancel() })
+	auth := "Bearer " + token
+
+	if resp, _ := do(t, srv, "GET", "/api/v1/play/config", "", ""); resp.StatusCode != 401 {
+		t.Fatalf("anonymous config: %d", resp.StatusCode)
+	}
+	// HTTP play is off by default: /play/ does not exist, even with the API token.
+	if resp, _ := do(t, srv, "GET", "/play/playlist.m3u", auth, ""); resp.StatusCode != 404 {
+		t.Fatalf("off by default: %d", resp.StatusCode)
+	}
+	_, body := do(t, srv, "GET", "/api/v1/play/config", auth, "")
+	if !strings.Contains(body, `"enabled":false`) || !strings.Contains(body, `"pools":[]`) {
+		t.Fatalf("default config: %s", body)
+	}
+	resp, body := do(t, srv, "PUT", "/api/v1/play/config", auth, `{"enabled":true,"requireAuth":true,"users":[{"name":"ana"}],"pools":[{"name":"hotel","entries":["10.0.0.0/24"]}],"rules":[{"action":"deny","pool":"hotel"}]}`)
+	if resp.StatusCode != 200 || !strings.Contains(body, `"token":"`) {
+		t.Fatalf("set: %d %s", resp.StatusCode, body)
+	}
+	if resp, body := do(t, srv, "PUT", "/api/v1/play/config", auth, `{"enabled":true,"rules":[{"action":"allow","pool":"missing"}]}`); resp.StatusCode != 422 || !strings.Contains(body, "missing") {
+		t.Fatalf("invalid: %d %s", resp.StatusCode, body)
+	}
+	if resp, _ := do(t, srv, "PUT", "/api/v1/play/config", auth, `{"enabled":true,"surprise":1}`); resp.StatusCode != 400 {
+		t.Fatalf("unknown field: %d", resp.StatusCode)
+	}
+	if _, body := do(t, srv, "GET", "/api/v1/play/config", auth, ""); !strings.Contains(body, `"requireAuth":true`) {
+		t.Fatalf("a rejected change must not alter the config: %s", body)
+	}
+	// Viewers need their token, not the API token.
+	if resp, _ := do(t, srv, "GET", "/play/playlist.m3u", "", ""); resp.StatusCode != 401 {
+		t.Fatalf("play without credentials: %d", resp.StatusCode)
+	}
+	if _, body := do(t, srv, "GET", "/api/v1/play/clients", auth, ""); strings.TrimSpace(body) != "[]" {
+		t.Fatalf("clients: %s", body)
 	}
 }

@@ -79,6 +79,7 @@ type Runtime struct {
 	inputs  []*inputRun
 	outputs []*outputRun
 	stab    *stabilizer.Stabilizer
+	hub     *Hub
 
 	chunks    chan chunk
 	errs      chan inputErr
@@ -103,7 +104,7 @@ func Start(parent context.Context, svc Service, cfg media.Config, log *slog.Logg
 		return nil, err
 	}
 	r := &Runtime{
-		svc: svc, log: log.With("service", svc.ID), stab: stab, done: make(chan struct{}),
+		svc: svc, log: log.With("service", svc.ID), stab: stab, hub: newHub(), done: make(chan struct{}),
 		chunks: make(chan chunk, chunkQueue), errs: make(chan inputErr, 16),
 		cmds: make(chan command), statusReq: make(chan chan Status),
 		active: -1, events: newRing(eventsKept),
@@ -248,6 +249,7 @@ func (r *Runtime) writeOutput(ctx context.Context, idx int) {
 
 func (r *Runtime) loop(ctx context.Context) {
 	defer close(r.done)
+	defer r.hub.Shutdown() // ends the HTTP viewers when the service stops
 	tick := time.NewTicker(loopTick)
 	health := time.NewTicker(healthTick)
 	defer tick.Stop()
@@ -312,6 +314,7 @@ func (r *Runtime) flush(now time.Time, force bool) {
 func (r *Runtime) dispatch() {
 	data := append([]byte(nil), r.batch...)
 	r.batch = r.batch[:0]
+	r.hub.Publish(data)
 	for _, out := range r.outputs {
 		select {
 		case out.queue <- data:
@@ -423,7 +426,7 @@ func (r *Runtime) snapshot(now time.Time) Status {
 	st := Status{
 		State: "running", ActiveInput: r.active, UptimeSec: int64(now.Sub(r.startedAt).Seconds()),
 		OutKbps: r.outKbps, PMTVersion: r.stab.PMTVersion(), Mapping: r.stab.Mapping(), Events: r.events.list(),
-		Inputs: []InputStatus{}, Outputs: []OutputStatus{},
+		Inputs: []InputStatus{}, Outputs: []OutputStatus{}, Viewers: r.hub.Viewers(),
 	}
 	for i, in := range r.inputs {
 		st.Inputs = append(st.Inputs, InputStatus{

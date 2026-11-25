@@ -41,6 +41,8 @@ type Status struct {
 	Mapping     []stabilizer.MapEntry `json:"mapping"`
 	Outputs     []OutputStatus        `json:"outputs"`
 	Events      []Event               `json:"events"`
+	// Viewers is the number of HTTP play clients watching right now.
+	Viewers int `json:"viewers"`
 }
 
 // stoppedStatus is what a service that is not running reports.

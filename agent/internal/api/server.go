@@ -18,6 +18,7 @@ import (
 	"nodo/agent/internal/binaries"
 	"nodo/agent/internal/host"
 	"nodo/agent/internal/mtxconf"
+	"nodo/agent/internal/play"
 	"nodo/agent/internal/service"
 	"nodo/agent/internal/supervisor"
 )
@@ -49,6 +50,9 @@ type Config struct {
 	Supervisor *supervisor.Supervisor
 	// Host reports resources, network, hardware and recommendations; nil disables /api/v1/host.
 	Host *host.Monitor
+	// Play is HTTP play (/play/<id>, /play/playlist.m3u); PlayStore holds its access configuration.
+	Play      *play.Handler
+	PlayStore *play.Store
 	// FFmpeg is the FFmpeg binary (or name) reported by /binaries.
 	FFmpeg string
 }
@@ -75,6 +79,15 @@ func New(cfg Config, mgr *service.Manager) http.Handler {
 	s.mux.HandleFunc("PUT /api/v1/mediamtx/paths/{name...}", s.auth(s.mtxPath("set")))
 	s.mux.HandleFunc("PATCH /api/v1/mediamtx/paths/{name...}", s.auth(s.mtxPath("patch")))
 	s.mux.HandleFunc("DELETE /api/v1/mediamtx/paths/{name...}", s.auth(s.mtxPath("remove")))
+	if cfg.Play != nil {
+		// Not behind s.auth: viewers are not panel users. The handler applies address rules and tokens itself.
+		s.mux.Handle("/play/", cfg.Play)
+		s.mux.HandleFunc("GET /api/v1/play/clients", s.auth(s.playClients))
+	}
+	if cfg.PlayStore != nil {
+		s.mux.HandleFunc("GET /api/v1/play/config", s.auth(s.playConfig))
+		s.mux.HandleFunc("PUT /api/v1/play/config", s.auth(s.playSetConfig))
+	}
 	s.mux.HandleFunc("GET /api/v1/host", s.auth(s.hostView))
 	s.mux.HandleFunc("GET /api/v1/binaries", s.auth(s.binList))
 	s.mux.HandleFunc("GET /api/v1/binaries/mediamtx/latest", s.auth(s.binLatest))
@@ -745,4 +758,28 @@ func (s *Server) hostView(w http.ResponseWriter, _ *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, s.cfg.Host.View())
+}
+
+// ---- HTTP play ----
+
+func (s *Server) playConfig(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, http.StatusOK, s.cfg.PlayStore.Get())
+}
+
+// playSetConfig validates and applies the access configuration; an invalid one is answered with 422 and changes nothing.
+func (s *Server) playSetConfig(w http.ResponseWriter, r *http.Request) {
+	var c play.Config
+	if !decodeBodyMax(w, r, &c, 1<<20) {
+		return
+	}
+	saved, err := s.cfg.PlayStore.Set(c)
+	if err != nil {
+		writeError(w, http.StatusUnprocessableEntity, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, saved)
+}
+
+func (s *Server) playClients(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, http.StatusOK, s.cfg.Play.Clients())
 }
