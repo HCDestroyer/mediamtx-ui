@@ -3,7 +3,7 @@ import { create } from "zustand";
 import { ChannelFeed, type FeedError, type ServerMeta, type Snapshot } from "../core/feed";
 import type { Rate } from "../core/mediamtx/bitrate";
 import type { Summary } from "../core/mediamtx/summary";
-import type { Channel } from "../core/mediamtx/types";
+import type { Channel, RawPathConf } from "../core/mediamtx/types";
 import type { Ports } from "../core/mediamtx/urls";
 import { transportFor } from "../core/transport";
 import { connectionOf, useConnection } from "./connection";
@@ -31,11 +31,12 @@ interface ChannelsState {
   updatedAt: number | null;
   version: string | null;
   ports: Ports | null;
+  pathDefaults: RawPathConf | null;
 }
 
 const initial: ChannelsState = {
   status: "loading", error: null, channels: [], rates: {}, summary: EMPTY_SUMMARY,
-  history: [], updatedAt: null, version: null, ports: null,
+  history: [], updatedAt: null, version: null, ports: null, pathDefaults: null,
 };
 
 export const useChannels = create<ChannelsState>()(() => initial);
@@ -62,7 +63,8 @@ let currentServerId: string | null = null;
 export const channelFeed = new ChannelFeed(
   {
     onSnapshot,
-    onMeta: (meta: ServerMeta) => useChannels.setState({ version: meta.version, ports: meta.ports }),
+    onMeta: (meta: ServerMeta) =>
+      useChannels.setState({ version: meta.version, ports: meta.ports, pathDefaults: meta.pathDefaults }),
     onError: (error) =>
       useChannels.setState((state) => ({ error, status: state.updatedAt ? state.status : "error" })),
     onResult: (ok) => {

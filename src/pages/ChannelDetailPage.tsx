@@ -1,12 +1,17 @@
-import { Card, Chip, EmptyState, Skeleton } from "@heroui/react";
-import { ArrowDown, ArrowLeft, ArrowUp, Film, Volume2 } from "lucide-react";
+import { Button, Card, Chip, EmptyState, Skeleton, useOverlayState } from "@heroui/react";
+import { ArrowDown, ArrowLeft, ArrowUp, Film, Pencil, Shuffle, Trash2, Volume2 } from "lucide-react";
 import type { ReactNode } from "react";
 import { ChannelStatusChip, DynamicChip } from "../components/ChannelChips";
 import { CopyUrlMenu } from "../components/CopyUrlMenu";
+import { DeleteChannelDialog } from "../components/DeleteChannelDialog";
+import { ForwardCard } from "../components/ForwardCard";
+import { PathEditor } from "../components/PathEditor";
+import { TranscodeWizard } from "../components/TranscodeWizard";
 import { formatBytes, formatMbps, formatSince } from "../core/format";
+import { maskUrlSecrets } from "../core/mask";
 import { readerLabel, sourceLabel } from "../core/mediamtx/labels";
 import type { Track } from "../core/mediamtx/types";
-import { t } from "../i18n/es";
+import { fmt, t } from "../i18n/es";
 import { useChannelsFeed } from "../store/channels";
 
 function Row({ label, children }: { label: string; children: ReactNode }) {
@@ -38,6 +43,9 @@ export default function ChannelDetailPage({ name }: { name: string }) {
   const channel = data.channels.find((c) => c.name === name);
   const rate = data.rates[name] ?? null;
   const now = Date.now();
+  const editor = useOverlayState();
+  const wizard = useOverlayState();
+  const remove = useOverlayState();
 
   const back = (
     <a
@@ -78,12 +86,30 @@ export default function ChannelDetailPage({ name }: { name: string }) {
           </div>
           <p className="mt-1 text-sm text-[var(--muted)]">
             {channel.source
-              ? `${sourceLabel(channel.source.type)}${channel.source.id ? ` · ${channel.source.id}` : ""}`
+              ? `${sourceLabel(channel.source.type)}${channel.source.id ? ` · ${maskUrlSecrets(channel.source.id)}` : ""}`
               : t.detail.noOrigin}
           </p>
         </div>
-        <CopyUrlMenu channel={channel.name} />
+        <div className="flex flex-wrap gap-2">
+          <Button variant="secondary" onPress={editor.open}>
+            <Pencil size={16} aria-hidden />
+            {t.edit.edit}
+          </Button>
+          <Button variant="secondary" onPress={wizard.open}>
+            <Shuffle size={16} aria-hidden />
+            {t.transcode.open}
+          </Button>
+          <CopyUrlMenu channel={channel.name} />
+        </div>
       </div>
+      <PathEditor state={editor} target={{ kind: "edit", name: channel.name }} />
+      <TranscodeWizard state={wizard} origin={channel.name} />
+      <DeleteChannelDialog
+        state={remove}
+        name={channel.name}
+        dynamic={channel.kind === "dynamic"}
+        onDeleted={() => (window.location.hash = "#/")}
+      />
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
         <div className="flex min-w-0 flex-col gap-4">
@@ -134,6 +160,8 @@ export default function ChannelDetailPage({ name }: { name: string }) {
             </Card.Content>
           </Card>
 
+          <ForwardCard channel={channel.name} dynamic={channel.kind === "dynamic"} />
+
           <Card>
             <Card.Header className="flex flex-row items-center justify-between">
               <Card.Title>{t.detail.readers}</Card.Title>
@@ -152,6 +180,19 @@ export default function ChannelDetailPage({ name }: { name: string }) {
                   ))}
                 </ul>
               )}
+            </Card.Content>
+          </Card>
+
+          <Card>
+            <Card.Content className="flex flex-row items-center gap-3">
+              <div className="min-w-0 flex-1">
+                <p className="font-semibold">{t.del.title}</p>
+                <p className="text-xs text-[var(--muted)]">{channel.kind === "dynamic" ? t.del.dynamicBody : fmt(t.del.body, { name: channel.name })}</p>
+              </div>
+              <Button variant="danger-soft" onPress={remove.open}>
+                <Trash2 size={16} aria-hidden />
+                {t.del.delete}
+              </Button>
             </Card.Content>
           </Card>
         </div>

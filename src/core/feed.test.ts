@@ -60,7 +60,9 @@ describe("ChannelFeed", () => {
     feed.subscribe();
     await advance(6000);
     expect(log.meta).toHaveLength(1);
-    expect(log.meta[0]).toMatchObject({ version: "v1.21.4", ports: { rtsp: { port: 8554 }, srt: { port: 8890 } } });
+    expect(log.meta[0]).toMatchObject({
+      version: "v1.21.4", ports: { rtsp: { port: 8554 }, srt: { port: 8890 } }, pathDefaults: { source: "publisher" },
+    });
   });
 
   it("stops when the last subscriber leaves", async () => {

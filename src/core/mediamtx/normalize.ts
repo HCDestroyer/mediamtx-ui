@@ -77,10 +77,11 @@ export function isPatternConf(name: string): boolean {
 export function mergeChannels(runtime: Channel[], confs: RawPathConf[] | null): Channel[] {
   const byName = new Map(runtime.map((c) => [c.name, c]));
   for (const conf of confs ?? []) {
-    if (isPatternConf(conf.name) || byName.has(conf.name)) continue;
-    byName.set(conf.name, {
-      name: conf.name,
-      confName: conf.name,
+    const name = conf.name;
+    if (!name || isPatternConf(name) || byName.has(name)) continue;
+    byName.set(name, {
+      name,
+      confName: name,
       kind: "configured",
       live: false,
       source: null,

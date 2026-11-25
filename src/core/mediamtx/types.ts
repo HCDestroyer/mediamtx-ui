@@ -28,7 +28,8 @@ export interface RawPath {
 }
 
 export interface RawPathConf {
-  name: string;
+  /** Missing in the path defaults, which belong to no path. */
+  name?: string;
   source?: string;
   [key: string]: unknown;
 }

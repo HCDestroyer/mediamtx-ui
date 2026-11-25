@@ -16,7 +16,7 @@ route and field names to older servers).
 | --- | --- | --- |
 | 1 | Scaffold, responsive layout, theme, server store, endpoint resolver | done |
 | 2 | Dashboard, channel list and detail, copy URLs, demo mode, panel login | done |
-| 3 | Path editor, transcode wizard, native `forward` multistream, YAML export | |
+| 3 | Path editor, transcode wizard, native `forward` multistream, delete, YAML export | done |
 | 4 | Host agent: `mediamtx.yml` editing with validation, routes, binaries, hardware | |
 | 5 | Connections + kick, WHEP/HLS preview | |
 | 6 | Android APK | |
@@ -30,7 +30,7 @@ npm run typecheck
 npm test
 npm run build        # outputs dist/
 npm run preview      # serve dist/ on :4173, needed by the browser tests
-npm run e2e          # browser tests; needs Playwright and `npm run preview` running
+npm run e2e          # browser tests (dashboard, login, writes); needs Playwright and `npm run preview` running
 ```
 
 The browser tests in `e2e/` use [Playwright](https://playwright.dev), which is not a
@@ -66,6 +66,25 @@ src/pages/       one file per screen (lazy-loaded except Channels)
 src/i18n/        UI strings
 scripts/         development helpers
 ```
+
+## Changing a server's configuration
+
+- Everything goes through the Control API (`/v3/config/paths/*`): create, edit, delete,
+  the transcode wizard and the multistream destinations. Changes are live but **not**
+  written to `mediamtx.yml`; the panel shows a banner and **Export YAML** produces the
+  `paths:` section (only values that differ from the defaults; credentials masked on
+  screen, real in the copy/download).
+- Hook names depend on the server: v1.21 uses `runOnOnline`/`runOnOnlineRestart` and
+  deprecates `runOnReady`. The panel reads `/v3/config/path-defaults/get` and uses the
+  right pair.
+- The transcode wizard sets that hook on the origin and creates `<origin>_<height>` as a
+  publisher path. FFmpeg must exist on the MediaMTX host; the audio map is optional
+  (`0:a:0?`) so channels without audio still work.
+- Multistream uses MediaMTX's native `forward` list (stream copy, no re-encode).
+  Stream keys are written as `rtmps://host/app#KEY` and shown masked.
+- Not verified against a real MediaMTX binary yet: the API semantics (PATCH of arrays,
+  duplicate/missing path status codes) follow the OpenAPI file and the demo simulator.
+  The demo server is writable too, so every flow can be tried without a server.
 
 ## Security
 

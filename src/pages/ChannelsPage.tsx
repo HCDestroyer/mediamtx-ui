@@ -1,10 +1,13 @@
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
-import { Alert, Button, Card, EmptyState, SearchField, Skeleton, Table, Tabs } from "@heroui/react";
-import { ArrowDown, ArrowUp, Eye, Radio } from "lucide-react";
+import { Alert, Button, Card, EmptyState, SearchField, Skeleton, Table, Tabs, useOverlayState } from "@heroui/react";
+import { ArrowDown, ArrowUp, Eye, Plus, Radio, Shuffle } from "lucide-react";
+import { PathEditor } from "../components/PathEditor";
+import { TranscodeWizard } from "../components/TranscodeWizard";
 import { ChannelStatusChip, DynamicChip, videoSummary } from "../components/ChannelChips";
 import { CopyUrlMenu } from "../components/CopyUrlMenu";
 import { KpiCard } from "../components/KpiCard";
 import { formatAgo, formatMbps } from "../core/format";
+import { maskUrlSecrets } from "../core/mask";
 import { sourceLabel } from "../core/mediamtx/labels";
 import type { Channel } from "../core/mediamtx/types";
 import { useChannelsFeed } from "../store/channels";
@@ -61,6 +64,8 @@ export default function ChannelsPage() {
   const [filter, setFilter] = useState<Filter>("all");
   const deferredQuery = useDeferredValue(query);
   const desktop = useMediaQuery(DESKTOP_QUERY);
+  const editor = useOverlayState();
+  const wizard = useOverlayState();
 
   const rows = useMemo(
     () => applyFilter(data.channels, filter, deferredQuery),
@@ -98,14 +103,39 @@ export default function ChannelsPage() {
 
   return (
     <div className="flex flex-col gap-5">
-      <div>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+       <div>
         <h1 className="text-2xl font-bold tracking-tight">{t.channels.title}</h1>
         <p className="mt-1 text-sm text-[var(--muted)]">
           {loading
             ? t.channels.connecting
             : `${fmt(t.channels.liveOf, { live: summary.live, total: summary.total })} · ${fmt(t.channels.updated, { ago: formatAgo(data.updatedAt, now) })} · ${fmt(t.channels.refreshEvery, { n: pollMs / 1000 })}`}
         </p>
+       </div>
+       <div className="flex gap-2">
+        <Button variant="secondary" onPress={wizard.open} isDisabled={connecting}>
+          <Shuffle size={16} aria-hidden />
+          {t.transcode.open}
+        </Button>
+        <Button variant="primary" onPress={editor.open} isDisabled={connecting} className="max-lg:hidden">
+          <Plus size={16} aria-hidden />
+          {t.edit.newChannel}
+        </Button>
+       </div>
       </div>
+
+      {/* Primary action on mobile: floating button above the tab bar. */}
+      <Button
+        variant="primary"
+        onPress={editor.open}
+        isDisabled={connecting}
+        className="fixed right-4 bottom-[calc(env(safe-area-inset-bottom,0px)+5.5rem)] z-10 rounded-2xl shadow-lg lg:hidden"
+      >
+        <Plus size={18} aria-hidden />
+        {t.edit.newChannel}
+      </Button>
+      <PathEditor state={editor} target={{ kind: "new" }} />
+      <TranscodeWizard state={wizard} />
 
       {data.error ? (
         <Alert status={data.error === "auth" ? "warning" : "danger"}>
@@ -194,7 +224,7 @@ function ChannelName({ channel }: { channel: Channel }) {
         <span className="truncate font-semibold">{channel.name}</span>
         <DynamicChip kind={channel.kind} />
       </span>
-      <span className="truncate text-xs text-[var(--muted)]">{channel.source ? (channel.source.id.includes("://") ? channel.source.id : sourceLabel(channel.source.type)) : "—"}</span>
+      <span className="truncate text-xs text-[var(--muted)]">{channel.source ? (channel.source.id.includes("://") ? maskUrlSecrets(channel.source.id) : sourceLabel(channel.source.type)) : "—"}</span>
     </div>
   );
 }

@@ -1,21 +1,19 @@
-import { useState, type FormEvent, type ReactNode } from "react";
+import { useState, type FormEvent } from "react";
 import {
   Button,
-  Drawer,
   FieldError,
   Form,
   Input,
   Label,
-  Modal,
   TextField,
   type UseOverlayStateReturn,
 } from "@heroui/react";
 import { isValidApiUrl } from "../core/http";
 import { probeAll, type ProbeResult } from "../core/resolver";
 import { ENDPOINT_ORDER, SERVER_COLORS, type EndpointType, type Server, type ServerDraft } from "../core/types";
-import { DESKTOP_QUERY, useMediaQuery } from "../hooks/useMediaQuery";
 import { t } from "../i18n/es";
 import { EndpointProbeList } from "./EndpointProbeList";
+import { ResponsiveOverlay } from "./ResponsiveOverlay";
 
 const FORM_ID = "server-form";
 
@@ -61,52 +59,6 @@ function validate(fields: Fields): Errors {
     if (!isValidApiUrl(fields.urls[type])) errors[type] = t.servers.form.endpointInvalid;
   }
   return errors;
-}
-
-interface OverlayProps {
-  state: UseOverlayStateReturn;
-  title: string;
-  footer: ReactNode;
-  children: ReactNode;
-}
-
-/** Modal on desktop, bottom Drawer on mobile. */
-function Overlay({ state, title, footer, children }: OverlayProps) {
-  const desktop = useMediaQuery(DESKTOP_QUERY);
-  if (desktop) {
-    return (
-      <Modal state={state}>
-        <Modal.Backdrop>
-          <Modal.Container size="md" scroll="inside">
-            <Modal.Dialog>
-              <Modal.CloseTrigger />
-              <Modal.Header>
-                <Modal.Heading>{title}</Modal.Heading>
-              </Modal.Header>
-              <Modal.Body>{children}</Modal.Body>
-              <Modal.Footer>{footer}</Modal.Footer>
-            </Modal.Dialog>
-          </Modal.Container>
-        </Modal.Backdrop>
-      </Modal>
-    );
-  }
-  return (
-    <Drawer state={state}>
-      <Drawer.Backdrop>
-        <Drawer.Content placement="bottom">
-          <Drawer.Dialog>
-            <Drawer.Handle />
-            <Drawer.Header>
-              <Drawer.Heading>{title}</Drawer.Heading>
-            </Drawer.Header>
-            <Drawer.Body>{children}</Drawer.Body>
-            <Drawer.Footer>{footer}</Drawer.Footer>
-          </Drawer.Dialog>
-        </Drawer.Content>
-      </Drawer.Backdrop>
-    </Drawer>
-  );
 }
 
 interface ServerFormOverlayProps {
@@ -164,7 +116,7 @@ function ServerFormBody({ state, server, onSave }: ServerFormOverlayProps) {
   );
 
   return (
-    <Overlay
+    <ResponsiveOverlay
       state={state}
       title={server ? t.servers.form.editTitle : t.servers.form.addTitle}
       footer={footer}
@@ -253,6 +205,6 @@ function ServerFormBody({ state, server, onSave }: ServerFormOverlayProps) {
           </div>
         ) : null}
       </Form>
-    </Overlay>
+    </ResponsiveOverlay>
   );
 }

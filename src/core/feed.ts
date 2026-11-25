@@ -1,6 +1,6 @@
 import { BitrateTracker, type Rate } from "./mediamtx/bitrate";
 import {
-  ApiError, createApiClient, getGlobalConfig, getInfo, listPathConfs, listPaths, type ApiClient,
+  ApiError, createApiClient, getGlobalConfig, getInfo, getPathDefaults, listPathConfs, listPaths, type ApiClient,
 } from "./mediamtx/api";
 import { mergeChannels, normalizePath } from "./mediamtx/normalize";
 import { summarize, type Summary } from "./mediamtx/summary";
@@ -27,6 +27,8 @@ export interface Snapshot {
 export interface ServerMeta {
   version: string | null;
   ports: Ports | null;
+  /** `/v3/config/path-defaults/get`: tells which hook names the server knows and what a new path inherits. */
+  pathDefaults: RawPathConf | null;
 }
 
 export type FeedError = "auth" | "unreachable";
@@ -98,8 +100,12 @@ export class ChannelFeed {
     };
   }
 
-  /** Polls immediately, for example when the tab becomes visible again. */
-  refresh(): void {
+  /**
+   * Polls immediately, for example when the tab becomes visible again.
+   * `confs` also reloads the configured-paths list, which otherwise refreshes every few polls.
+   */
+  refresh(options: { confs?: boolean } = {}): void {
+    if (options.confs) this.confs = null;
     if (this.timer) this.restart();
   }
 
@@ -155,9 +161,13 @@ export class ChannelFeed {
 
   private async loadMeta(client: ApiClient, generation: number): Promise<void> {
     try {
-      const [conf, info] = await Promise.all([getGlobalConfig(client), getInfo(client).catch(() => null)]);
+      const [conf, info, pathDefaults] = await Promise.all([
+        getGlobalConfig(client),
+        getInfo(client).catch(() => null),
+        getPathDefaults(client).catch(() => null),
+      ]);
       if (generation === this.generation) {
-        this.callbacks.onMeta({ version: info?.version ?? null, ports: readPorts(conf) });
+        this.callbacks.onMeta({ version: info?.version ?? null, ports: readPorts(conf), pathDefaults });
       }
     } catch {
       // Try again on the next poll.
