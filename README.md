@@ -1,0 +1,66 @@
+# MediaMTX Panel
+
+Control panel for one or more [MediaMTX](https://mediamtx.org) servers. One React
+codebase builds the static web app and, later, the Android APK (Capacitor).
+
+Target MediaMTX version: **v1.21.4** (the panel reads `GET /v3/info` and adapts
+route and field names to older servers).
+
+## Status
+
+| Phase | Scope | State |
+| --- | --- | --- |
+| 1 | Scaffold, responsive layout, theme, server store, endpoint resolver | done |
+| 2 | Dashboard, channel list and detail, copy URLs, demo mode | next |
+| 3 | Path editor, transcode wizard, native `forward` multistream, YAML export | |
+| 4 | Host agent: `mediamtx.yml` editing with validation, routes, binaries, hardware | |
+| 5 | Connections + kick, WHEP/HLS preview | |
+| 6 | Android APK | |
+
+## Develop
+
+```bash
+npm install
+npm run dev          # http://localhost:5173
+npm run typecheck
+npm test
+npm run build        # outputs dist/
+```
+
+A stand-in for the Control API is included so the panel can be tried without a
+server:
+
+```bash
+node scripts/mock-mediamtx.mjs --port 9997 --user panel --pass secret
+```
+
+Then add a server in the panel with endpoint `127.0.0.1:9997`.
+
+## Conventions
+
+- All code, identifiers, comments and commits are in English. The UI is in
+  Spanish and every string lives in `src/i18n/es.ts`.
+- UI uses HeroUI v3 components only (`@heroui/react`, `@heroui/styles`), Tailwind v4.
+- Network access goes through `src/core/http.ts` so the Android build can swap in
+  a native transport without touching the rest of the app.
+- Initial bundle budget: under 250 KB gzip. Secondary screens are lazy-loaded.
+
+## Layout
+
+```
+src/core/        types, HTTP transport, endpoint resolver, server import/export
+src/store/       zustand stores: servers, preferences, connection state
+src/components/  app shell, sidebar, bottom tabs, header, shared widgets
+src/pages/       one file per screen (lazy-loaded except Channels)
+src/i18n/        UI strings
+scripts/         development helpers
+```
+
+## Notes
+
+- Changes made through the Control API are applied live but are **not** written to
+  `mediamtx.yml`; the panel will say so and offer a YAML export (phase 3).
+- A page served over HTTPS cannot call an `http://` API (mixed content). Serve the
+  panel over HTTP inside the LAN/VPN, or put the API behind an HTTPS proxy. The APK
+  is not affected.
+- Server credentials are stored in `localStorage` on the web build.
