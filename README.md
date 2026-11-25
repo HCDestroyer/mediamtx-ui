@@ -118,5 +118,5 @@ scripts/         development helpers
 A server can have an optional `nodo-agent` (see `agent/README.md`). Set its URL and token in the server form
 ("Agente (opcional)") and use "Probar agente" to check them. The **Servicios** screen then lists the
 agent's services, shows the output ↔ input PID map, and lets you start/stop, switch input, edit and delete.
-The agent token is a secret: it is encrypted with the vault and only exported when "include passwords" is on.
+The agent credentials (username and password, or the API token) are secrets: they are encrypted with the vault and only exported when "include passwords" is on.
 The demo server brings a simulated agent, so the whole screen works offline.

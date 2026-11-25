@@ -18,15 +18,30 @@ const check = (n, ok, x = '') => log.push(`${ok ? 'PASS' : 'FAIL'} ${n} ${x}`);
   await dialog.getByLabel('LAN').fill('127.0.0.1:9997');
   await dialog.getByLabel('Dirección del agente').fill(new globalThis.URL(URL).host);
 
+  // first run: the agent has no account yet, so the panel offers to create it with the API token
   await dialog.getByLabel('Token del agente').fill('wrong');
+  await dialog.getByLabel('Usuario del agente').fill('admin');
+  await dialog.getByLabel('Contraseña del agente').fill('correct horse battery');
   await dialog.getByRole('button', { name: 'Probar agente' }).click();
+  await page.waitForSelector('text=aún no tiene usuario');
+  await dialog.getByRole('button', { name: 'Crear usuario' }).click();
   await page.waitForSelector('text=Token incorrecto');
-  check('wrong token is reported', true);
+  check('a wrong token cannot create the first account', true);
 
   await dialog.getByLabel('Token del agente').fill(TOKEN);
+  await dialog.getByRole('button', { name: 'Crear usuario' }).click();
+  await page.waitForSelector('text=Usuario creado');
+  check('first account created from the panel', true);
+
+  // the token is not needed any more: log in with the account
+  await dialog.getByLabel('Token del agente').fill('');
+  await dialog.getByLabel('Contraseña del agente').fill('wrong password!');
+  await dialog.getByRole('button', { name: 'Probar agente' }).click();
+  await page.waitForSelector('text=Usuario o contraseña incorrectos');
+  await dialog.getByLabel('Contraseña del agente').fill('correct horse battery');
   await dialog.getByRole('button', { name: 'Probar agente' }).click();
   await page.waitForSelector('text=/Agente .* conectado/');
-  check('same-origin agent answers with the right token', true);
+  check('login with username and password', true);
   await dialog.getByRole('button', { name: 'Guardar' }).click();
 
   await page.goto(URL + '#/services');

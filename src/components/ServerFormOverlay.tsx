@@ -27,6 +27,8 @@ interface Fields {
   password: string;
   agentUrl: string;
   agentToken: string;
+  agentUser: string;
+  agentPassword: string;
 }
 
 function fieldsFrom(server?: Server): Fields {
@@ -39,6 +41,8 @@ function fieldsFrom(server?: Server): Fields {
     password: server?.password ?? "",
     agentUrl: server?.agent?.url ?? "",
     agentToken: server?.agent?.token ?? "",
+    agentUser: server?.agent?.username ?? "",
+    agentPassword: server?.agent?.password ?? "",
   };
 }
 
@@ -48,7 +52,7 @@ function draftFrom(fields: Fields): ServerDraft {
     color: fields.color,
     username: fields.username,
     password: fields.password,
-    ...(fields.agentUrl.trim() ? { agent: { url: fields.agentUrl, token: fields.agentToken } } : {}),
+    ...(fields.agentUrl.trim() ? { agent: { url: fields.agentUrl, token: fields.agentToken, username: fields.agentUser, password: fields.agentPassword } } : {}),
     endpoints: ENDPOINT_ORDER.map((type) => ({ type, apiUrl: fields.urls[type] })).filter(
       (e) => e.apiUrl.trim() !== "",
     ),
@@ -90,6 +94,7 @@ function ServerFormBody({ state, server, onSave }: ServerFormOverlayProps) {
   const [testing, setTesting] = useState(false);
   const [agentResult, setAgentResult] = useState<{ ok: boolean; text: string } | undefined>();
   const [agentTesting, setAgentTesting] = useState(false);
+  const [needsSetup, setNeedsSetup] = useState(false);
 
   const set = <K extends keyof Fields>(key: K, value: Fields[K]) => {
     setFields((f) => ({ ...f, [key]: value }));
@@ -114,29 +119,86 @@ function ServerFormBody({ state, server, onSave }: ServerFormOverlayProps) {
     setTesting(false);
   };
 
-  const testAgent = async () => {
+  const agentClient = () =>
+    createAgentClient({
+      baseUrl: normalizeApiUrl(fields.agentUrl),
+      ...(fields.agentUser.trim()
+        ? { credentials: { username: fields.agentUser.trim(), password: fields.agentPassword } }
+        : { token: fields.agentToken.trim() }),
+      transport: agentTransportFor({ demo: server?.demo }),
+    });
+
+  const agentFailure = (error: unknown): string => {
+    const status = error instanceof AgentError ? error.status : 0;
+    if (status === 401) return fields.agentUser.trim() ? t.servers.form.agentAuthUser : t.servers.form.agentAuth;
+    if (status === 429) return t.servers.form.agentLimited;
+    if (status === MIXED_CONTENT) return t.probeFailure["mixed-content"];
+    if (error instanceof AgentError && error.detail && status >= 400 && status < 500) return error.detail;
+    return t.servers.form.agentFail;
+  };
+
+  const checkAgentUrl = (): boolean => {
     const found = validate(fields);
     if (!fields.agentUrl.trim() || found.agent) {
       setErrors((e) => ({ ...e, agent: found.agent ?? t.servers.form.agentUrlInvalid }));
+      return false;
+    }
+    if (!fields.agentUser.trim() && !fields.agentToken.trim()) {
+      setAgentResult({ ok: false, text: t.servers.form.agentNeedsLogin });
+      return false;
+    }
+    return true;
+  };
+
+  const testAgent = async () => {
+    if (!checkAgentUrl()) return;
+    setAgentTesting(true);
+    try {
+      const client = agentClient();
+      // An agent without accounts (older build) has no status route: fall back to the token check.
+      const status = await client.authStatus().catch((error) => {
+        if (error instanceof AgentError && error.status === 404) return null;
+        throw error;
+      });
+      if (status?.setup) {
+        setNeedsSetup(true);
+        setAgentResult({ ok: false, text: t.servers.form.agentSetup });
+        return;
+      }
+      if (fields.agentUser.trim()) await client.login();
+      const info = await client.info();
+      setNeedsSetup(false);
+      setAgentResult({ ok: true, text: fmt(t.servers.form.agentOk, { version: info.version }) });
+    } catch (error) {
+      setAgentResult({ ok: false, text: agentFailure(error) });
+    } finally {
+      setAgentTesting(false);
+    }
+  };
+
+  /** First run of the agent: creates the account with the API token, then it is a normal login. */
+  const createAgentUser = async () => {
+    const user = fields.agentUser.trim();
+    if (!user || !fields.agentPassword || !fields.agentToken.trim()) {
+      setAgentResult({ ok: false, text: t.servers.form.agentSetupMissing });
       return;
     }
     setAgentTesting(true);
     try {
-      const client = createAgentClient({
+      await createAgentClient({
         baseUrl: normalizeApiUrl(fields.agentUrl),
         token: fields.agentToken.trim(),
         transport: agentTransportFor({ demo: server?.demo }),
-      });
-      const info = await client.info();
-      setAgentResult({ ok: true, text: fmt(t.servers.form.agentOk, { version: info.version }) });
+      }).setup(user, fields.agentPassword);
+      setNeedsSetup(false);
+      setAgentResult({ ok: true, text: t.servers.form.agentCreated });
     } catch (error) {
-      const status = error instanceof AgentError ? error.status : 0;
-      setAgentResult({
-        ok: false,
-        text: status === 401 ? t.servers.form.agentAuth : status === MIXED_CONTENT ? t.probeFailure["mixed-content"] : t.servers.form.agentFail,
-      });
+      // Here a 401 can only be the API token.
+      const wrongToken = error instanceof AgentError && error.status === 401;
+      setAgentResult({ ok: false, text: wrongToken ? t.servers.form.agentAuth : agentFailure(error) });
+    } finally {
+      setAgentTesting(false);
     }
-    setAgentTesting(false);
   };
 
   const footer = (
@@ -244,14 +306,30 @@ function ServerFormBody({ state, server, onSave }: ServerFormOverlayProps) {
             <Input inputMode="url" autoCapitalize="none" autoCorrect="off" spellCheck={false} placeholder="192.168.1.20:9980" />
             <FieldError>{errors.agent}</FieldError>
           </TextField>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <TextField name="agent-user" value={fields.agentUser} onChange={(v) => set("agentUser", v)}>
+              <Label>{t.servers.form.agentUser}</Label>
+              <Input autoCapitalize="none" autoComplete="off" />
+            </TextField>
+            <TextField name="agent-password" type="password" value={fields.agentPassword} onChange={(v) => set("agentPassword", v)}>
+              <Label>{t.servers.form.agentPassword}</Label>
+              <Input autoComplete="off" />
+            </TextField>
+          </div>
           <TextField name="agent-token" type="password" value={fields.agentToken} onChange={(v) => set("agentToken", v)}>
             <Label>{t.servers.form.agentToken}</Label>
             <Input autoComplete="off" />
           </TextField>
-          <div className="flex items-center gap-3">
+          <p className="-mt-1 text-xs text-[var(--muted)]">{t.servers.form.agentTokenHelp}</p>
+          <div className="flex flex-wrap items-center gap-3">
             <Button size="sm" variant="secondary" onPress={testAgent} isPending={agentTesting} isDisabled={!fields.agentUrl.trim()}>
               {t.servers.form.agentTest}
             </Button>
+            {needsSetup ? (
+              <Button size="sm" variant="primary" onPress={createAgentUser} isPending={agentTesting}>
+                {t.servers.form.agentCreate}
+              </Button>
+            ) : null}
             {agentResult ? (
               <p role="status" className={`text-xs ${agentResult.ok ? "text-[var(--success)]" : "text-[var(--danger)]"}`}>
                 {agentResult.text}

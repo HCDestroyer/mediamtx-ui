@@ -4,7 +4,7 @@ import { normalizeApiUrl } from "../core/http";
 import { DEMO_AGENT_TOKEN, DEMO_AGENT_URL } from "../core/agent/demo";
 import { DEMO_API_URL } from "../core/demo";
 import { newId } from "../core/serversIO";
-import type { Server, ServerDraft } from "../core/types";
+import type { AgentConfig, Server, ServerDraft } from "../core/types";
 import { SERVERS_STORAGE_NAME, secureStore } from "./secure";
 
 interface ServersState {
@@ -19,12 +19,22 @@ interface ServersState {
   addDemoServer: () => void;
 }
 
+function agentOf(draft: ServerDraft, url: string): AgentConfig {
+  const username = (draft.agent?.username ?? "").trim();
+  const password = draft.agent?.password ?? "";
+  return {
+    url,
+    token: (draft.agent?.token ?? "").trim(),
+    ...(username ? { username, password } : {}),
+  };
+}
+
 function clean(draft: ServerDraft): ServerDraft {
   const agentUrl = normalizeApiUrl(draft.agent?.url ?? "");
   const { agent: _agent, ...rest } = draft;
   return {
     ...rest,
-    ...(agentUrl ? { agent: { url: agentUrl, token: (draft.agent?.token ?? "").trim() } } : {}),
+    ...(agentUrl ? { agent: agentOf(draft, agentUrl) } : {}),
     name: draft.name.trim(),
     username: draft.username.trim(),
     endpoints: draft.endpoints

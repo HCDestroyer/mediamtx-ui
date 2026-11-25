@@ -5,23 +5,24 @@ import { AgentError, createAgentClient, MIXED_CONTENT, type AgentClient } from "
 import { DEMO_AGENT_TOKEN, DEMO_AGENT_URL } from "../core/agent/demo";
 import type { AgentMapEntry, AgentView, MapState } from "../core/agent/types";
 import { agentTransportFor } from "../core/transport";
-import type { Server } from "../core/types";
+import type { AgentConfig, Server } from "../core/types";
 import { ServiceEditor } from "../components/ServiceEditor";
 import { fmt, t } from "../i18n/es";
 import { hrefFor } from "../router";
 import { usePrefs } from "../store/prefs";
 import { selectActiveServer, useServers } from "../store/servers";
 
-type Problem = "unreachable" | "mixed" | "unauthorized" | null;
+type Problem = "unreachable" | "mixed" | "unauthorized" | "limited" | null;
 
 /** Demo servers always use the built-in simulated agent. */
-function agentOf(server: Server): { url: string; token: string } | undefined {
+function agentOf(server: Server): AgentConfig | undefined {
   return server.demo ? { url: DEMO_AGENT_URL, token: DEMO_AGENT_TOKEN } : server.agent;
 }
 
 function problemOf(error: unknown): Problem {
   if (!(error instanceof AgentError)) return "unreachable";
   if (error.status === 401 || error.status === 403) return "unauthorized";
+  if (error.status === 429) return "limited";
   if (error.status === MIXED_CONTENT) return "mixed";
   return "unreachable";
 }
@@ -64,7 +65,7 @@ export default function ServicesPage() {
       </Shell>
     );
   }
-  return <ServicesList key={`${server.id}:${agent.url}:${agent.token}`} server={server} agent={agent} />;
+  return <ServicesList key={`${server.id}:${agent.url}:${agent.token}:${agent.username ?? ""}:${agent.password ?? ""}`} server={server} agent={agent} />;
 }
 
 function Shell({ children, action }: { children: React.ReactNode; action?: React.ReactNode }) {
@@ -82,11 +83,18 @@ function Shell({ children, action }: { children: React.ReactNode; action?: React
   );
 }
 
-function ServicesList({ server, agent }: { server: Server; agent: { url: string; token: string } }) {
+function ServicesList({ server, agent }: { server: Server; agent: AgentConfig }) {
   const pollIntervalMs = usePrefs((s) => s.pollIntervalMs);
   const client = useMemo<AgentClient>(
-    () => createAgentClient({ baseUrl: agent.url, token: agent.token, transport: agentTransportFor(server) }),
-    [agent.url, agent.token, server],
+    () =>
+      createAgentClient({
+        baseUrl: agent.url,
+        ...(agent.username
+          ? { credentials: { username: agent.username, password: agent.password ?? "" } }
+          : { token: agent.token }),
+        transport: agentTransportFor(server),
+      }),
+    [agent.url, agent.token, agent.username, agent.password, server],
   );
   const [views, setViews] = useState<AgentView[] | null>(null);
   const [problem, setProblem] = useState<Problem>(null);
@@ -144,7 +152,7 @@ function ServicesList({ server, agent }: { server: Server; agent: { url: string;
       {problem ? (
         <Alert status="warning">
           <Alert.Content>
-            <Alert.Description>{problem === "mixed" ? t.services.mixed : problem === "unauthorized" ? t.services.unauthorized : t.services.unreachable}</Alert.Description>
+            <Alert.Description>{problem === "mixed" ? t.services.mixed : problem === "unauthorized" ? t.services.unauthorized : problem === "limited" ? t.services.limited : t.services.unreachable}</Alert.Description>
           </Alert.Content>
         </Alert>
       ) : null}

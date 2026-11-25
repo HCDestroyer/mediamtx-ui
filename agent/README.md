@@ -73,8 +73,15 @@ or by hand:
 sudo cp nodo-agent /usr/bin/nodo-agent
 sudo nodo-agent init              # systemd service "nodo", port 9980, data in /etc/nodo/nodo
 sudo systemctl enable --now nodo
-sudo cat /etc/nodo/nodo/token     # API token for the panel
+sudo cat /etc/nodo/nodo/token     # API token, only needed for the first account
 ```
+
+**Accounts.** The panel logs in with a username and password validated by the agent (PBKDF2-HMAC-SHA256,
+sessions signed with a secret in the data directory, 12 h, kept across restarts; repeated failures from
+one address are slowed down). There is no default `admin`/`admin`: the first account is created either from the panel
+("Crear usuario" in the server form, which needs the API token) or on the host with
+`sudo nodo-agent passwd <user>`, which also resets a forgotten password and takes effect without a restart.
+The API token keeps working for scripts and cannot change a user's password.
 
 Maintainers: after changing `src/`, run `scripts/build-agent.sh` (rebuilds the panel into `dist/`, then the
 binary; `--panel-only` skips the binary) and commit `agent/internal/web/dist`. `scripts/release.sh [version]`
@@ -100,10 +107,12 @@ when it crosses a network.
 
 ## API
 
-All `/api/v1` routes need `Authorization: Bearer <token>`.
+All `/api/v1` routes except `auth/status`, `auth/login` and `auth/setup` need `Authorization: Bearer <session or API token>`.
 
 | Route | |
 | --- | --- |
+| `GET /api/v1/auth/status` | public: `{agent, accounts, setup}` |
+| `POST /api/v1/auth/setup` · `login` · `password` | first account (API token), login, change password |
 | `GET /api/v1/info` | version, FFmpeg found |
 | `GET /api/v1/services` | every service with its status |
 | `POST /api/v1/services` | create (the id is derived from the name when omitted) |
@@ -139,5 +148,5 @@ that the output structure and continuity never change.
 
 ## Not done yet
 
-Panel login (user and password validated by the agent; today the panel uses the API token), passive backup mode, DVB input (TBS cards), SDT/NIT for multi-service output, a slate (screensaver)
+Several roles/users with different permissions, a change-password screen in the panel (the API route exists), passive backup mode, DVB input (TBS cards), SDT/NIT for multi-service output, a slate (screensaver)
 for missing streams, SRT without FFmpeg.

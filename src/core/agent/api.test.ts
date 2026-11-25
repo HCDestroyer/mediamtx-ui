@@ -61,3 +61,66 @@ describe("agent client", () => {
     expect(calls).toHaveLength(0);
   });
 });
+
+describe("agent client with username and password", () => {
+  const creds = { username: "admin", password: "correct horse" };
+
+  function agent(sessionToken: () => string) {
+    const calls: HttpRequest[] = [];
+    let valid = "";
+    const transport: Transport = async (r) => {
+      calls.push(r);
+      const path = new URL(r.url).pathname;
+      if (path === "/api/v1/auth/login") return { status: 200, ok: true, data: { token: (valid = sessionToken()) } };
+      if (r.headers?.Authorization !== `Bearer ${valid}`) return { status: 401, ok: false, data: { error: "no" } };
+      return { status: 200, ok: true, data: [] };
+    };
+    return { calls, rotate: () => { valid = "rotated"; }, make: (url = "http://10.9.9.9:9980") => createAgentClient({ baseUrl: url, credentials: creds, transport, pageProtocol: "http:" }) };
+  }
+
+  it("logs in once, then reuses the session across clients", async () => {
+    const { calls, make } = agent(() => "s1");
+    await make().list();
+    await make().list();
+    expect(calls.filter((c) => c.url.endsWith("/auth/login"))).toHaveLength(1);
+    expect(calls[0]?.body).toEqual(creds);
+    expect(calls[1]?.headers?.Authorization).toBe("Bearer s1");
+  });
+
+  it("logs in again when the session is rejected, and retries once", async () => {
+    let n = 0;
+    const { calls, rotate, make } = agent(() => `s${++n}`);
+    await make("http://10.9.9.8:9980").list(); // logs in
+    rotate(); // the agent no longer accepts the cached session (restart with a new secret, password change)
+    expect(await make("http://10.9.9.8:9980").list()).toEqual([]);
+    expect(calls.filter((c) => c.url.endsWith("/auth/login"))).toHaveLength(2);
+  });
+
+  it("gives up with 401 when the credentials are wrong", async () => {
+    const transport: Transport = async () => ({ status: 401, ok: false, data: { error: "wrong username or password" } });
+    const client = createAgentClient({ baseUrl: "http://10.9.9.7:9980", credentials: creds, transport, pageProtocol: "http:" });
+    const error = await client.list().catch((e) => e);
+    expect(error).toMatchObject({ status: 401, detail: "wrong username or password" });
+  });
+
+  it("prefers the API token when both are given", async () => {
+    const calls: HttpRequest[] = [];
+    const client = createAgentClient({
+      baseUrl: "http://10.9.9.6:9980", token: "tok", credentials: creds, pageProtocol: "http:",
+      transport: async (r) => { calls.push(r); return { status: 200, ok: true, data: [] }; },
+    });
+    await client.list();
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.headers?.Authorization).toBe("Bearer tok");
+  });
+
+  it("asks for the status without credentials", async () => {
+    const calls: HttpRequest[] = [];
+    const client = createAgentClient({
+      baseUrl: "http://10.9.9.5:9980", pageProtocol: "http:",
+      transport: async (r) => { calls.push(r); return { status: 200, ok: true, data: { agent: true, setup: true, accounts: true, version: "1" } }; },
+    });
+    expect((await client.authStatus()).setup).toBe(true);
+    expect(calls[0]?.headers).toEqual({});
+  });
+});

@@ -91,4 +91,13 @@ describe("agent in export/import", () => {
     expect(back?.agent).toEqual({ url: "http://10.0.0.2:9998", token: "secret-token" });
     expect(parseImport(exportServers([server], false)).servers[0]?.agent).toEqual({ url: "http://10.0.0.2:9998", token: "" });
   });
+
+  it("treats the agent password like the server password", () => {
+    const withUser = { ...server, agent: { url: "http://10.0.0.2:9980", token: "", username: "admin", password: "agent-secret" } };
+    expect(exportServers([withUser], false)).not.toContain("agent-secret");
+    expect(exportServers([withUser], false)).toContain('"username": "admin"');
+    const [back] = parseImport(exportServers([withUser], true)).servers;
+    expect(back?.agent).toEqual({ url: "http://10.0.0.2:9980", token: "", username: "admin", password: "agent-secret" });
+    expect(parseImport(exportServers([withUser], false)).servers[0]?.agent).toEqual({ url: "http://10.0.0.2:9980", token: "", username: "admin", password: "" });
+  });
 });

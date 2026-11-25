@@ -1,5 +1,5 @@
 import { normalizeApiUrl } from "./http";
-import { ENDPOINT_ORDER, SERVER_COLORS, type EndpointType, type Server } from "./types";
+import { ENDPOINT_ORDER, SERVER_COLORS, type AgentConfig, type EndpointType, type Server } from "./types";
 
 export const EXPORT_FORMAT = "nodo/servers";
 /** Format name used before the project was renamed; still accepted on import. */
@@ -9,7 +9,7 @@ export const EXPORT_VERSION = 1;
 interface ExportFile {
   format: typeof EXPORT_FORMAT;
   version: number;
-  servers: Array<Omit<Server, "password" | "agent"> & { password?: string; agent?: { url: string; token?: string } }>;
+  servers: Array<Omit<Server, "password" | "agent"> & { password?: string; agent?: { url: string; token?: string; username?: string; password?: string } }>;
 }
 
 export function newId(): string {
@@ -23,7 +23,7 @@ export function exportServers(servers: Server[], includePasswords: boolean): str
     servers: servers.map((s) => {
       const { password, agent, ...rest } = s;
       // The agent token is as sensitive as the password: it only travels when asked for.
-      const exported = agent ? { ...rest, agent: includePasswords ? agent : { url: agent.url } } : rest;
+      const exported = agent ? { ...rest, agent: includePasswords ? agent : { url: agent.url, ...(agent.username ? { username: agent.username } : {}) } } : rest;
       return includePasswords ? { ...exported, password } : exported;
     }),
   };
@@ -40,6 +40,11 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
 const asString = (value: unknown): string => (typeof value === "string" ? value : "");
+
+function readAgent(raw: Record<string, unknown>, url: string): AgentConfig {
+  const username = asString(raw.username).trim();
+  return { url, token: asString(raw.token), ...(username ? { username, password: asString(raw.password) } : {}) };
+}
 
 /**
  * Parses an exported file. Throws on input that is not an export at all;
@@ -93,7 +98,7 @@ export function parseImport(text: string, existingIds: ReadonlySet<string> = new
       endpoints,
       username: asString(entry.username),
       password: asString(entry.password),
-      ...(agentUrl ? { agent: { url: agentUrl, token: asString((entry.agent as Record<string, unknown>).token) } } : {}),
+      ...(agentUrl ? { agent: readAgent(entry.agent as Record<string, unknown>, agentUrl) } : {}),
     });
   });
 
