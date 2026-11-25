@@ -1,7 +1,9 @@
 import { normalizeApiUrl } from "./http";
 import { ENDPOINT_ORDER, SERVER_COLORS, type EndpointType, type Server } from "./types";
 
-export const EXPORT_FORMAT = "mediamtx-panel/servers";
+export const EXPORT_FORMAT = "nodo/servers";
+/** Format name used before the project was renamed; still accepted on import. */
+const LEGACY_EXPORT_FORMAT = "mediamtx-panel/servers";
 export const EXPORT_VERSION = 1;
 
 interface ExportFile {
@@ -49,7 +51,7 @@ export function parseImport(text: string, existingIds: ReadonlySet<string> = new
   } catch {
     throw new Error("invalid-json");
   }
-  if (!isRecord(raw) || raw.format !== EXPORT_FORMAT || !Array.isArray(raw.servers)) {
+  if (!isRecord(raw) || (raw.format !== EXPORT_FORMAT && raw.format !== LEGACY_EXPORT_FORMAT) || !Array.isArray(raw.servers)) {
     throw new Error("invalid-format");
   }
   const warnings: string[] = [];

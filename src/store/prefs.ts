@@ -23,7 +23,7 @@ export const usePrefs = create<PrefsState>()(
       setTheme: (theme) => set({ theme }),
       setPollIntervalMs: (pollIntervalMs) => set({ pollIntervalMs }),
     }),
-    { name: "mediamtx-panel:prefs", version: 1 },
+    { name: "nodo:prefs", version: 1 },
   ),
 );
 

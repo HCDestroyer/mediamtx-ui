@@ -1,7 +1,11 @@
-# MediaMTX Panel
+# Nodo
 
-Control panel for one or more [MediaMTX](https://mediamtx.org) servers. One React
-codebase builds the static web app and, later, the Android APK (Capacitor).
+Control panel for one or more [MediaMTX](https://mediamtx.org) servers, plus a host
+agent that edits `mediamtx.yml`, manages binaries and hardware, and runs routes
+(ingest, UDP/RTP/SRT/RTMP outputs, stable PIDs). One React codebase builds the static
+web app and, later, the Android APK (Capacitor).
+
+The project was first called "MediaMTX Panel"; the repository name still reflects that.
 
 Target MediaMTX version: **v1.21.4** (the panel reads `GET /v3/info` and adapts
 route and field names to older servers).

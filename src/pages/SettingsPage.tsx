@@ -33,7 +33,7 @@ export default function SettingsPage() {
   const fileInput = useRef<HTMLInputElement>(null);
 
   const doExport = () => {
-    download("mediamtx-panel-servers.json", exportServers(servers, includePasswords));
+    download("nodo-servers.json", exportServers(servers, includePasswords));
     toast.success(t.settings.exported);
   };
 

@@ -60,7 +60,7 @@ export const useServers = create<ServersState>()(
           activeServerId: state.activeServerId ?? incoming[0]?.id ?? null,
         })),
     }),
-    { name: "mediamtx-panel:servers", version: 1 },
+    { name: "nodo:servers", version: 1 },
   ),
 );
 

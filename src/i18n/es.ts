@@ -3,7 +3,7 @@
  * Keep keys grouped by screen; use `fmt` for interpolation.
  */
 export const es = {
-  app: { name: "Panel MediaMTX" },
+  app: { name: "Nodo" },
   nav: {
     channels: "Canales",
     connections: "Conexiones",

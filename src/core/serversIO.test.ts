@@ -52,7 +52,7 @@ describe("servers export / import", () => {
 
   it("skips invalid entries and reports them", () => {
     const text = JSON.stringify({
-      format: "mediamtx-panel/servers",
+      format: "nodo/servers",
       version: 1,
       servers: [{ name: "" }, { name: "NoEndpoints", endpoints: [] }, { name: "Ok", endpoints: [{ type: "vpn", apiUrl: "10.8.0.2:9997" }] }],
     });
@@ -60,6 +60,15 @@ describe("servers export / import", () => {
     expect(servers.map((s) => s.name)).toEqual(["Ok"]);
     expect(servers[0]?.endpoints[0]?.apiUrl).toBe("http://10.8.0.2:9997");
     expect(warnings).toHaveLength(2);
+  });
+
+  it("still accepts the pre-rename format", () => {
+    const text = JSON.stringify({
+      format: "mediamtx-panel/servers",
+      version: 1,
+      servers: [{ name: "Old", endpoints: [{ type: "lan", apiUrl: "10.0.0.1:9997" }] }],
+    });
+    expect(parseImport(text).servers.map((s) => s.name)).toEqual(["Old"]);
   });
 
   it("rejects files that are not exports", () => {
