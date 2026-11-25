@@ -1,6 +1,7 @@
 import { Button, Card, Chip, EmptyState, Skeleton, useOverlayState } from "@heroui/react";
 import { ArrowDown, ArrowLeft, ArrowUp, Film, Pencil, Shuffle, Trash2, Volume2 } from "lucide-react";
 import type { ReactNode } from "react";
+import { ChannelPreview } from "../components/ChannelPreview";
 import { ChannelStatusChip, DynamicChip } from "../components/ChannelChips";
 import { CopyUrlMenu } from "../components/CopyUrlMenu";
 import { DeleteChannelDialog } from "../components/DeleteChannelDialog";
@@ -116,9 +117,7 @@ export default function ChannelDetailPage({ name }: { name: string }) {
           <Card>
             <Card.Header><Card.Title>{t.detail.previewTitle}</Card.Title></Card.Header>
             <Card.Content>
-              <div className="grid aspect-video place-items-center rounded-xl bg-[var(--surface-secondary)] p-6 text-center text-sm text-[var(--muted)]">
-                {t.detail.previewBody}
-              </div>
+              <ChannelPreview channel={channel.name} live={channel.live} />
             </Card.Content>
           </Card>
 
