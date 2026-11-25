@@ -146,3 +146,9 @@ npm run android:debug     # builds the panel, syncs it and runs ./gradlew assemb
 `.github/workflows/agent.yml` tests the agent and attaches the release tarballs on tags.
 Not verified on a device or emulator: the native paths are covered by unit tests with fake plugins only.
 `capacitor.config.json` is JSON because the Capacitor CLI cannot load a `.ts` config under TypeScript 7.
+
+## Releases
+
+Pushing a tag `v*` runs `.github/workflows/release.yml`: it tests the agent, builds the Linux amd64/arm64 tarballs (with
+`SHA256SUMS`) and the debug APK, and attaches them to a **draft** release for you to review and publish. The agent tarballs
+include `install.sh`; the APK is signed with the debug key (a store release needs your own keystore).
