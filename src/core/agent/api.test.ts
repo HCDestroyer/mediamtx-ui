@@ -124,3 +124,27 @@ describe("agent client with username and password", () => {
     expect(calls[0]?.headers).toEqual({});
   });
 });
+
+describe("MediaMTX configuration calls", () => {
+  it("uses the documented routes and sends the overlay as JSON", async () => {
+    const { client, calls } = fake(() => ({ status: 200, data: { ok: true, merged: "x" } }));
+    await client.mtxState();
+    await client.mtxValidate("logLevel: debug\n");
+    await client.mtxApply("logLevel: debug\n");
+    await client.mtxUndo();
+    expect(calls.map((c) => `${c.method} ${new URL(c.url).pathname}`)).toEqual([
+      "GET /api/v1/mediamtx/config",
+      "POST /api/v1/mediamtx/validate",
+      "PUT /api/v1/mediamtx/config",
+      "POST /api/v1/mediamtx/undo",
+    ]);
+    expect(calls[1]?.body).toEqual({ overlay: "logLevel: debug\n" });
+    expect(calls[2]?.body).toEqual({ overlay: "logLevel: debug\n" });
+  });
+
+  it("surfaces why a configuration was rejected", async () => {
+    const { client } = fake(() => ({ status: 422, data: { error: 'json: unknown field "badParam"' } }));
+    const error = await client.mtxApply("badParam: 1").catch((e) => e);
+    expect(error).toMatchObject({ status: 422, detail: 'json: unknown field "badParam"' });
+  });
+});

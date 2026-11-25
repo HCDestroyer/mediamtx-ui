@@ -116,3 +116,19 @@ export interface AgentInfo {
   mediamtx: boolean;
   startedAt: number;
 }
+
+/** State of the additional MediaMTX configuration file (GET /api/v1/mediamtx/config). */
+export interface MtxConfigState {
+  basePath: string;
+  baseFound: boolean;
+  /** The generated file MediaMTX must be started with. */
+  outPath: string;
+  outFound: boolean;
+  /** Text of the additional file. */
+  overlay: string;
+  /** True when changes are checked with `mediamtx --validate-conf`, false for the basic checks only. */
+  validator: boolean;
+  canUndo: boolean;
+}
+
+export type MtxValidation = { ok: true; merged: string } | { ok: false; error: string };

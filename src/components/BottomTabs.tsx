@@ -10,7 +10,7 @@ export function BottomTabs() {
       aria-label="Principal"
       className="fixed inset-x-0 bottom-0 z-20 grid grid-cols-5 border-t border-[var(--border)] bg-[var(--surface)] px-1 pt-2 pb-safe lg:hidden"
     >
-      {NAV_ITEMS.map((item) => {
+      {NAV_ITEMS.filter((item) => item.mobile !== false).map((item) => {
         const active = isActive(item, route);
         return (
           <NavLink

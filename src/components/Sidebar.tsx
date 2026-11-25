@@ -1,4 +1,4 @@
-import { Radio, Link2, Server, Waypoints, SlidersHorizontal, type LucideIcon } from "lucide-react";
+import { FileCog, Radio, Link2, Server, Waypoints, SlidersHorizontal, type LucideIcon } from "lucide-react";
 import { t } from "../i18n/es";
 import { hrefFor, useRoute, type Route } from "../router";
 import { NavLink } from "./NavLink";
@@ -8,12 +8,15 @@ export interface NavItem {
   route: Exclude<Route["name"], "channel" | "not-found">;
   label: string;
   icon: LucideIcon;
+  /** Shown in the bottom tabs too (default); reached from Settings on mobile when false. */
+  mobile?: boolean;
 }
 
 export const NAV_ITEMS: NavItem[] = [
   { route: "channels", label: t.nav.channels, icon: Radio },
   { route: "connections", label: t.nav.connections, icon: Link2 },
   { route: "services", label: t.nav.services, icon: Waypoints },
+  { route: "config", label: t.nav.config, icon: FileCog, mobile: false },
   { route: "servers", label: t.nav.servers, icon: Server },
   { route: "settings", label: t.nav.settings, icon: SlidersHorizontal },
 ];
@@ -25,7 +28,7 @@ export function isActive(item: NavItem, route: Route): boolean {
 
 const GROUPS: Array<{ title: string; items: NavItem["route"][] }> = [
   { title: t.nav.groupOperation, items: ["channels", "services", "connections"] },
-  { title: t.nav.groupManagement, items: ["servers", "settings"] },
+  { title: t.nav.groupManagement, items: ["config", "servers", "settings"] },
 ];
 
 /** Desktop navigation: server selector on top, then the sections. */

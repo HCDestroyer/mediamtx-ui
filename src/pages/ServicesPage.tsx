@@ -1,23 +1,15 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { AlertDialog, Alert, Button, Card, Chip, EmptyState, Spinner, toast, useOverlayState } from "@heroui/react";
 import { ArrowRight, Pencil, Play, Plus, Square, Trash2, Waypoints } from "lucide-react";
-import { AgentError, createAgentClient, MIXED_CONTENT, type AgentClient } from "../core/agent/api";
-import { DEMO_AGENT_TOKEN, DEMO_AGENT_URL } from "../core/agent/demo";
+import { AgentError, MIXED_CONTENT, type AgentClient } from "../core/agent/api";
 import type { AgentMapEntry, AgentView, MapState } from "../core/agent/types";
-import { agentTransportFor } from "../core/transport";
-import type { AgentConfig, Server } from "../core/types";
 import { ServiceEditor } from "../components/ServiceEditor";
+import { useActiveAgent } from "../hooks/useAgentClient";
 import { fmt, t } from "../i18n/es";
 import { hrefFor } from "../router";
 import { usePrefs } from "../store/prefs";
-import { selectActiveServer, useServers } from "../store/servers";
 
 type Problem = "unreachable" | "mixed" | "unauthorized" | "limited" | null;
-
-/** Demo servers always use the built-in simulated agent. */
-function agentOf(server: Server): AgentConfig | undefined {
-  return server.demo ? { url: DEMO_AGENT_URL, token: DEMO_AGENT_TOKEN } : server.agent;
-}
 
 function problemOf(error: unknown): Problem {
   if (!(error instanceof AgentError)) return "unreachable";
@@ -42,7 +34,7 @@ const STATE_LABEL: Record<MapState, string> = { ok: t.services.stateOk, fallback
 const KIND_LABEL: Record<string, string> = { video: t.services.video, audio: t.services.audio, subtitle: t.services.subtitles, data: t.services.data };
 
 export default function ServicesPage() {
-  const server = useServers(selectActiveServer);
+  const { server, agent, client } = useActiveAgent();
   if (!server) {
     return (
       <Shell>
@@ -50,8 +42,7 @@ export default function ServicesPage() {
       </Shell>
     );
   }
-  const agent = agentOf(server);
-  if (!agent) {
+  if (!agent || !client) {
     return (
       <Shell>
         <EmptyState className="flex flex-col items-center gap-2 py-16 text-center">
@@ -65,7 +56,7 @@ export default function ServicesPage() {
       </Shell>
     );
   }
-  return <ServicesList key={`${server.id}:${agent.url}:${agent.token}:${agent.username ?? ""}:${agent.password ?? ""}`} server={server} agent={agent} />;
+  return <ServicesList key={server.id} client={client} />;
 }
 
 function Shell({ children, action }: { children: React.ReactNode; action?: React.ReactNode }) {
@@ -83,19 +74,8 @@ function Shell({ children, action }: { children: React.ReactNode; action?: React
   );
 }
 
-function ServicesList({ server, agent }: { server: Server; agent: AgentConfig }) {
+function ServicesList({ client }: { client: AgentClient }) {
   const pollIntervalMs = usePrefs((s) => s.pollIntervalMs);
-  const client = useMemo<AgentClient>(
-    () =>
-      createAgentClient({
-        baseUrl: agent.url,
-        ...(agent.username
-          ? { credentials: { username: agent.username, password: agent.password ?? "" } }
-          : { token: agent.token }),
-        transport: agentTransportFor(server),
-      }),
-    [agent.url, agent.token, agent.username, agent.password, server],
-  );
   const [views, setViews] = useState<AgentView[] | null>(null);
   const [problem, setProblem] = useState<Problem>(null);
   const [editing, setEditing] = useState<AgentView | null>(null);

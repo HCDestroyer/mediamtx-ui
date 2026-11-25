@@ -1,5 +1,5 @@
 import { getTransport, isMixedContentBlocked, type Transport } from "../http";
-import type { AgentInfo, AgentService, AgentView } from "./types";
+import type { AgentInfo, AgentService, AgentView, MtxConfigState, MtxValidation } from "./types";
 
 export class AgentError extends Error {
   readonly status: number;
@@ -47,6 +47,12 @@ export interface AgentClient {
   login(): Promise<void>;
   changePassword(current: string, next: string): Promise<void>;
   info(): Promise<AgentInfo>;
+  mtxState(): Promise<MtxConfigState>;
+  /** Checks a candidate without saving it. */
+  mtxValidate(overlay: string): Promise<MtxValidation>;
+  /** Validates and applies; rejects with AgentError(422) and the reason when it is invalid. */
+  mtxApply(overlay: string): Promise<MtxConfigState>;
+  mtxUndo(): Promise<MtxConfigState>;
   list(): Promise<AgentView[]>;
   create(service: Omit<AgentService, "id"> & { id?: string }): Promise<AgentView>;
   update(service: AgentService): Promise<AgentView>;
@@ -127,6 +133,10 @@ export function createAgentClient(options: AgentClientOptions): AgentClient {
       if (options.credentials) sessionCache.set(cacheKey(base, options.credentials), session);
     },
     info: () => call<AgentInfo>("GET", "/api/v1/info"),
+    mtxState: () => call<MtxConfigState>("GET", "/api/v1/mediamtx/config"),
+    mtxValidate: (overlay) => call<MtxValidation>("POST", "/api/v1/mediamtx/validate", { overlay }),
+    mtxApply: (overlay) => call<MtxConfigState>("PUT", "/api/v1/mediamtx/config", { overlay }),
+    mtxUndo: () => call<MtxConfigState>("POST", "/api/v1/mediamtx/undo"),
     list: () => call<AgentView[]>("GET", "/api/v1/services"),
     create: (service) => call<AgentView>("POST", "/api/v1/services", service),
     update: (service) => call<AgentView>("PUT", `/api/v1/services/${enc(service.id)}`, service),

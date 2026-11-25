@@ -5,6 +5,7 @@ export type Route =
   | { name: "channel"; channel: string }
   | { name: "connections" }
   | { name: "services" }
+  | { name: "config" }
   | { name: "servers" }
   | { name: "settings" }
   | { name: "not-found" };
@@ -18,6 +19,7 @@ export function parseHash(hash: string): Route {
   if (first === "channels" && second && parts.length === 2) return { name: "channel", channel: second };
   if (parts.length === 1 && first === "channels") return { name: "channels" };
   if (parts.length === 1 && first === "connections") return { name: "connections" };
+  if (parts.length === 1 && first === "config") return { name: "config" };
   if (parts.length === 1 && first === "services") return { name: "services" };
   if (parts.length === 1 && first === "servers") return { name: "servers" };
   if (parts.length === 1 && first === "settings") return { name: "settings" };
@@ -32,6 +34,8 @@ export function hrefFor(route: Exclude<Route, { name: "not-found" }>): string {
       return `#/channels/${encodeURIComponent(route.channel)}`;
     case "connections":
       return "#/connections";
+    case "config":
+      return "#/config";
     case "services":
       return "#/services";
     case "servers":

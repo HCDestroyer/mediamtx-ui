@@ -105,6 +105,25 @@ The API token is created on first run in `<data>/token` (mode 0600) or taken fro
 It is never logged. Keep the API on localhost or behind a firewall/VPN; add `-tls-cert`/`-tls-key`
 when it crosses a network.
 
+## Additional MediaMTX configuration
+
+MediaMTX reads one file and has no include directive, so the agent keeps your `mediamtx.yml` untouched and
+owns a second, additional file (`<data>/mediamtx/overlay.yml`). It merges both into a third, generated file
+(`<data>/mediamtx/mediamtx.yml`) and MediaMTX is started with that one: `mediamtx <data>/mediamtx/mediamtx.yml`
+(MediaMTX reloads it by itself when it changes).
+
+```bash
+sudo nodo-agent init -mediamtx-conf /etc/mediamtx/mediamtx.yml -mediamtx-bin /usr/local/bin/mediamtx
+```
+
+- The overlay only holds what you add or change. Mappings merge key by key (one field of a path defined in your
+  file can be overridden), lists and scalars replace, `null` removes a parameter or a whole path.
+- Scalars and comments are copied as written (`yes` stays `yes`).
+- A candidate is checked before anything changes: valid YAML, well-formed path names and, with `-mediamtx-bin`,
+  `mediamtx --validate-conf`. If it fails, the API answers 422 with MediaMTX's message and the running
+  file is not touched. One step of undo is kept; regenerating (start-up, after editing your file) never erases it.
+- Not verified against a real MediaMTX binary yet: the tests use a stand-in that implements `--validate-conf`.
+
 ## API
 
 All `/api/v1` routes except `auth/status`, `auth/login` and `auth/setup` need `Authorization: Bearer <session or API token>`.
@@ -113,6 +132,8 @@ All `/api/v1` routes except `auth/status`, `auth/login` and `auth/setup` need `A
 | --- | --- |
 | `GET /api/v1/auth/status` | public: `{agent, accounts, setup}` |
 | `POST /api/v1/auth/setup` · `login` · `password` | first account (API token), login, change password |
+| `GET/PUT /api/v1/mediamtx/config` | state of the files / validate and apply `{overlay}` (422 + reason when invalid) |
+| `POST /api/v1/mediamtx/validate` · `undo` | check a candidate without saving / back one step |
 | `GET /api/v1/info` | version, FFmpeg found |
 | `GET /api/v1/services` | every service with its status |
 | `POST /api/v1/services` | create (the id is derived from the name when omitted) |

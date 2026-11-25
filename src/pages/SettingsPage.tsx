@@ -4,6 +4,7 @@ import { Download, Upload } from "lucide-react";
 import { SecuritySettings } from "../components/auth/SecuritySettings";
 import { exportServers, parseImport } from "../core/serversIO";
 import { fmt, t } from "../i18n/es";
+import { hrefFor } from "../router";
 import { POLL_INTERVALS_MS, usePrefs, type PollIntervalMs, type ThemePref } from "../store/prefs";
 import { useServers } from "../store/servers";
 
@@ -60,6 +61,21 @@ export default function SettingsPage() {
   return (
     <div className="flex max-w-2xl flex-col gap-5">
       <h1 className="text-2xl font-bold tracking-tight">{t.settings.title}</h1>
+
+      <Card>
+        <Card.Content className="flex flex-row items-center gap-3">
+          <div className="min-w-0 flex-1">
+            <p className="font-semibold">{t.settings.mediamtxConfig}</p>
+            <p className="text-xs text-[var(--muted)]">{t.settings.mediamtxConfigHelp}</p>
+          </div>
+          <a
+            href={hrefFor({ name: "config" })}
+            className="rounded-xl bg-[var(--surface-secondary)] px-3 py-2 text-sm font-medium"
+          >
+            {t.settings.open}
+          </a>
+        </Card.Content>
+      </Card>
 
       <Card>
         <Card.Header>
