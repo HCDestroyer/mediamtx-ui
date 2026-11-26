@@ -1,0 +1,1 @@
+import{x as e}from"./useTextField-BRQrL_Je.js";import{_ as t}from"./es-BmqNOrqQ.js";var n=t(),r=({...t})=>(0,n.jsx)(e,{...t});r.displayName=`HeroUI.Form`;var i=Object.assign(r,{Root:r});export{i as t};

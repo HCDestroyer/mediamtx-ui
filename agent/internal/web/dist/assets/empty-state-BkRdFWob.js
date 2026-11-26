@@ -1,0 +1,1 @@
+import{E as e,O as t,_ as n,g as r,h as i}from"./es-BmqNOrqQ.js";var a=i({base:`empty-state`}),o=t(e(),1),s=n(),c=({children:e,className:t,...n})=>{let i=(0,o.useMemo)(()=>a({className:t}),[t]);return(0,s.jsx)(r.div,{className:i,"data-slot":`empty-state`,...n,children:e||`No results found`})};c.displayName=`HeroUI.EmptyState`;var l=Object.assign(c,{Root:c});export{l as t};

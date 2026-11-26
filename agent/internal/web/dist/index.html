@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#2b62e6" />
+    <title>Nodo</title>
+    <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+    <script>
+      // Apply the stored theme before first paint to avoid a flash.
+      (function () {
+        try {
+          var raw = localStorage.getItem("nodo:prefs");
+          var theme = raw ? JSON.parse(raw).state.theme : "system";
+          var dark =
+            theme === "dark" ||
+            (theme !== "light" &&
+              window.matchMedia("(prefers-color-scheme: dark)").matches);
+          var el = document.documentElement;
+          el.classList.toggle("dark", dark);
+          el.setAttribute("data-theme", dark ? "dark" : "light");
+        } catch (e) {}
+      })();
+    </script>
+    <script type="module" crossorigin src="./assets/index-TdhSyX7h.js"></script>
+    <link rel="modulepreload" crossorigin href="./assets/es-BmqNOrqQ.js">
+    <link rel="modulepreload" crossorigin href="./assets/button-C6_wUWoR.js">
+    <link rel="modulepreload" crossorigin href="./assets/shim-i2CqJ-Ae.js">
+    <link rel="modulepreload" crossorigin href="./assets/use-overlay-exit-hold-B8ixuBxs.js">
+    <link rel="modulepreload" crossorigin href="./assets/vaultFormat-C_HTSLKm.js">
+    <link rel="modulepreload" crossorigin href="./assets/preload-helper-DclECHGd.js">
+    <link rel="modulepreload" crossorigin href="./assets/servers-BOWBQuvq.js">
+    <link rel="modulepreload" crossorigin href="./assets/dist-B7Dxpfjw.js">
+    <link rel="stylesheet" crossorigin href="./assets/index-6qFOA6Lb.css">
+  </head>
+  <body>
+    <div id="root"></div>
+  </body>
+</html>

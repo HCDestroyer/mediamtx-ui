@@ -1,0 +1,1 @@
+var e=`enc:v1:`,t=t=>t.startsWith(e);export{t as n,e as t};

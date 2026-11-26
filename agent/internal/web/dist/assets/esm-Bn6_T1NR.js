@@ -1,0 +1,2 @@
+const __vite__mapDeps=(i,m=__vite__mapDeps,d=(m.f||(m.f=["./web-DO5P-wtY.js","./dist-B7Dxpfjw.js"])))=>i.map(i=>d[i]);
+import{a as e}from"./dist-B7Dxpfjw.js";import{t}from"./preload-helper-DclECHGd.js";var n=e(`Share`,{web:()=>t(()=>import(`./web-DO5P-wtY.js`).then(e=>new e.ShareWeb),__vite__mapDeps([0,1]),import.meta.url)});export{n as Share};

@@ -40,8 +40,11 @@ jobs:
         with:
           distribution: temurin
           java-version: 21
-      # Installs the Android SDK and accepts its licenses on the runner.
-      - uses: android-actions/setup-android@v3
+      # The runner image already has the Android SDK; this accepts its licenses and adds what the build needs.
+      - name: Android SDK packages
+        run: |
+          yes | sdkmanager --licenses > /dev/null || true
+          sdkmanager "platforms;android-35" "build-tools;35.0.0"
       - run: npm ci
       - run: npm test
       - run: npm run android:sync
